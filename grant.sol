@@ -56,7 +56,9 @@ contract Grant {
 	event TaxPointChange(uint256 taxPoint);
 	event RoundIntervalChange(uint256 interval);
 	event VotingUnitChange(uint256 votingUnit);
-	 
+
+	event Vote(address indexed account, uint256 indexed project, uint256 vote);
+
 	modifier onlyOwner() {
 		require(msg.sender == owner);
 		_;
@@ -215,6 +217,8 @@ contract Grant {
 		if (rest > 0) {
 			msg.sender.transfer(rest);
 		}
+
+		emit Vote(msg.sender, _projectID, _votes);
 	}
 
 	function takeOutGrants(uint256 _projectID, uint256 _amount) external {

@@ -166,14 +166,14 @@ contract Grant {
 	function grantsOf(uint256 _projectID) public view returns (uint256 rest, uint256 total) {
 		Project storage project = _projects[_projectID];
 		uint256 pRound = project.round;
-		if (pRound <= currentRound) {
+		if (pRound == currentRound) {
 			return (0, 0);
 		}
 		total = project.grants; // round end
 		if (_totalSupportArea[pRound] != 0 && !ban[_projectID]) {
 			total = total.add(project.supportArea.mul(supportPool[pRound]) / _totalSupportArea[pRound]);
 		}
-		require(total > project.withdrew);
+		require(total >= project.withdrew);
 		rest = total - project.withdrew;
 	}
 

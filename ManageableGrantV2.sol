@@ -53,6 +53,8 @@ contract Grant {
 
 	mapping(uint256 => bool) public ban;
 
+	mapping(uint256 => mapping(address => uint256)) private _votesRecord;
+
 	constructor() {
 		initialize();
 	}
@@ -194,10 +196,16 @@ contract Grant {
 		withdrew = project.withdrew;
 	}
 
-	// Added:
-	function dangerSetEndTime(uint256 _extend) external onlyOwner {
-		endTime[currentRound] = _extend;
+	function votesOf(uint256 _projectID, address _user) external view returns (uint256) {
+		return _votesRecord[_projectID][_user];
 	}
+
+	// Added:
+	function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
+		startTime[currentRound] = _start;
+		endTime[currentRound] = _end;
+	}
+	function dangerSetEndTime(uint256 _extend) external onlyOwner {}
 
 	function roundOver() external onlyOwner {
 		require(block.timestamp > endTime[currentRound] && endTime[currentRound] > 0);
@@ -280,6 +288,7 @@ contract Grant {
 
 		project.votes[msg.sender] += _votes;
 		project.grants += grants;
+		_votesRecord[_projectID][msg.sender] += grants;
 		uint256 supportArea = _votes.mul(project.totalVotes - voted);
 		project.totalVotes += _votes;
 		project.supportArea = supportArea.add(project.supportArea);

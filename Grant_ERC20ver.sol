@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.7.4;
 
-import { IREC20 } from "./interface/IERC20.sol"
+import { IERC20 } from "./interface/IERC20.sol";
 
 library SafeMath {
 	function add(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -59,11 +59,13 @@ contract Grant {
 
 	IERC20 public acceptToken;
 
-	constructor() {
-		initialize();
+	mapping(uint256 => mapping(address => uint256)) private _votesRecord;
+
+	constructor(IERC20 _acceptToken) {
+		initialize(_acceptToken);
 	}
 
-	function initialize (IREC20 _acceptToken) public {
+	function initialize (IERC20 _acceptToken) public {
 		require(!initialized);
 		initialized = true;
 		taxPoint = 100;
@@ -86,6 +88,16 @@ contract Grant {
 	modifier onlyOwner() {
 		require(msg.sender == owner);
 		_;
+	}
+
+	function acceptTokenInfo() external view returns (
+		address token,
+		string memory symbol,
+		uint256 decimals
+	) {
+		token = address(acceptToken);
+		symbol = acceptToken.symbol();
+		decimals = acceptToken.decimals();
 	}
 
 	function allProjects(uint256 _round) external view returns (uint256[] memory projects) {
@@ -202,9 +214,14 @@ contract Grant {
 		withdrew = project.withdrew;
 	}
 
+	function votesOf(uint256 _projectID, address _user) external view returns (uint256) {
+		return _votesRecord[_projectID][_user];
+	}
+
 	// Added:
-	function dangerSetEndTime(uint256 _extend) external onlyOwner {
-		endTime[currentRound] = _extend;
+	function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
+		startTime[currentRound] = _start;
+		endTime[currentRound] = _end;
 	}
 
 	function roundOver() external onlyOwner {
@@ -252,7 +269,7 @@ contract Grant {
 		endTime[currentRound] = block.timestamp + interval;
 	}
 
-	function donate(uint256 _amount) public {
+	function donateToken(uint256 _amount) public {
 		require(acceptToken.transferFrom(msg.sender, address(this), _amount));
 		uint256 fee = _amount.mul(taxPoint) / 10000;
 		uint256 support = _amount - fee;
@@ -289,6 +306,7 @@ contract Grant {
 
 		project.votes[msg.sender] += _votes;
 		project.grants += grants;
+		_votesRecord[_projectID][msg.sender] += grants;
 		uint256 supportArea = _votes.mul(project.totalVotes - voted);
 		project.totalVotes += _votes;
 		project.supportArea = supportArea.add(project.supportArea);

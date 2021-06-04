@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.7.4;
 
-import { IERC20 } from "./interface/IERC20.sol";
-
 library SafeMath {
 	function add(uint256 a, uint256 b) internal pure returns (uint256) {
 		uint256 c = a + b;
@@ -18,8 +16,6 @@ library SafeMath {
 		return c;
 	}
 }
-
-// Based on ManageableGrantV2.sol
 
 contract Grant {
 	using SafeMath for uint256;
@@ -57,24 +53,20 @@ contract Grant {
 
 	mapping(uint256 => bool) public ban;
 
-	IERC20 public acceptToken;
-
 	mapping(uint256 => mapping(address => uint256)) private _votesRecord;
 
-	constructor(IERC20 _acceptToken) {
-		initialize(_acceptToken);
+	constructor() {
+		initialize();
 	}
 
-	function initialize (IERC20 _acceptToken) public {
+	function initialize () public {
 		require(!initialized);
 		initialized = true;
 		taxPoint = 500;
 		currentRound = 1;
 		interval = 60 days;
-		basicVotingUnit = 1e18;
+		basicVotingUnit = 1e17;
 		owner = msg.sender;
-	
-		acceptToken = _acceptToken;
 	}
 
 	event BanProject(uint256 indexed project, bool ban);
@@ -88,16 +80,6 @@ contract Grant {
 	modifier onlyOwner() {
 		require(msg.sender == owner);
 		_;
-	}
-
-	function acceptTokenInfo() external view returns (
-		address token,
-		string memory symbol,
-		uint256 decimals
-	) {
-		token = address(acceptToken);
-		symbol = acceptToken.symbol();
-		decimals = acceptToken.decimals();
 	}
 
 	function allProjects(uint256 _round) external view returns (uint256[] memory projects) {
@@ -122,7 +104,7 @@ contract Grant {
 			uint256 pid = projects[i];
 			votes[i] = _projects[pid].totalVotes;
 			support[i] = ban[pid] ? 0 : _projects[pid].supportArea;
-			grants[i] = _projects[pid].grants;
+			grants[i] = ban[pid] ? 0 : _projects[pid].grants;
 		}
 	}
 
@@ -154,7 +136,7 @@ contract Grant {
 			projects[i] = pid;
 			votes[i] = _projects[pid].totalVotes;
 			support[i] = ban[pid] ? 0 : _projects[pid].supportArea;
-			grants[i] = _projects[pid].grants;
+			grants[i] = ban[pid] ? 0 : _projects[pid].grants;
 		}
 	}
 
@@ -186,11 +168,11 @@ contract Grant {
 	function grantsOf(uint256 _projectID) public view returns (uint256 rest, uint256 total) {
 		Project storage project = _projects[_projectID];
 		uint256 pRound = project.round;
-		if (pRound == currentRound) {
+		if (pRound == currentRound || ban[_projectID]) {
 			return (0, 0);
 		}
 		total = project.grants; // round end
-		if (_totalSupportArea[pRound] != 0 && !ban[_projectID]) {
+		if (_totalSupportArea[pRound] != 0) {
 			total = total.add(project.supportArea.mul(supportPool[pRound]) / _totalSupportArea[pRound]);
 		}
 		require(total >= project.withdrew);
@@ -209,7 +191,7 @@ contract Grant {
 		round = project.round;
 		createAt = project.createAt;
 		totalVotes = project.totalVotes;
-		grants = project.grants;
+		grants = ban[_projectID] ? 0 : project.grants;
 		supportArea = ban[_projectID] ? 0 : project.supportArea;
 		withdrew = project.withdrew;
 	}
@@ -218,10 +200,19 @@ contract Grant {
 		return _votesRecord[_projectID][_user];
 	}
 
-	// Added:
 	function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
 		startTime[currentRound] = _start;
 		endTime[currentRound] = _end;
+	}
+	function dangerSetEndTime(uint256 _extend) external onlyOwner {}
+	// Added:
+	function dangerSetArea(uint256 _projectID, uint256 _supportArea) external onlyOwner {
+		Project storage project = _projects[_projectID];
+		require(project.round == currentRound);
+		require(!ban[_projectID]);
+
+		_totalSupportArea[currentRound] = _totalSupportArea[currentRound].add(_supportArea) - project.supportArea;
+		project.supportArea = _supportArea;
 	}
 
 	function roundOver() external onlyOwner {
@@ -233,6 +224,7 @@ contract Grant {
 		owner = _newOwner;
 	}
 
+	// Updated:
 	function banProject(uint256 _projectID, bool _ban) external onlyOwner {
 		Project storage project = _projects[_projectID];
 		require(project.round == currentRound);
@@ -240,8 +232,10 @@ contract Grant {
 		ban[_projectID] = _ban;
 		if (_ban) {
 			_totalSupportArea[currentRound] -= project.supportArea;
+			_tax += project.grants;
 		} else {
 			_totalSupportArea[currentRound] = project.supportArea.add(_totalSupportArea[currentRound]);
+			_tax -= project.grants;
 		}
 		emit BanProject(_projectID, _ban);
 	}
@@ -276,13 +270,12 @@ contract Grant {
 		endTime[currentRound] = _end;
 	}
 
-	function donateToken(uint256 _amount) public {
-		require(acceptToken.transferFrom(msg.sender, address(this), _amount));
-		uint256 fee = _amount.mul(taxPoint) / 10000;
-		uint256 support = _amount - fee;
+	function donate() public payable {
+		uint256 fee = msg.value.mul(taxPoint) / 10000;
+		uint256 support = msg.value - fee;
 		_tax += fee;
 		supportPool[currentRound] += support;
-		preTaxSupportPool[currentRound] += _amount;
+		preTaxSupportPool[currentRound] += msg.value;
 	}
 
 	function uploadProject(uint256 _projectID) external {
@@ -296,7 +289,7 @@ contract Grant {
 		_projectList[currentRound].push(_projectID);
 	}
 
-	function vote(uint256 _projectID, uint256 _votes) external {
+	function vote(uint256 _projectID, uint256 _votes) external payable {
 		require(block.timestamp < endTime[currentRound]);
 		Project storage project = _projects[_projectID];
 		require(project.round == currentRound);
@@ -305,8 +298,8 @@ contract Grant {
 		uint256 votingPoints = _votes.mul(_votes.add(1)) / 2;
 		votingPoints = votingPoints.add(_votes.mul(voted));
 		uint256 cost = votingPoints.mul(votingUnit[currentRound]);
-
-		require(acceptToken.transferFrom(msg.sender, address(this), cost));
+		
+		require(msg.value >= cost);
 
 		uint256 fee = cost.mul(taxPoint) / 10000;
 		uint256 grants = cost - fee;
@@ -322,6 +315,11 @@ contract Grant {
 			_totalSupportArea[currentRound] = supportArea.add(_totalSupportArea[currentRound]);
 		}
 
+		uint256 rest = msg.value - cost;
+		if (rest > 0) {
+			msg.sender.transfer(rest);
+		}
+
 		emit Vote(msg.sender, _projectID, _votes);
 	}
 
@@ -331,12 +329,16 @@ contract Grant {
 		(uint256 rest, ) = grantsOf(_projectID);
 		require(rest >= _amount);
 		project.withdrew += _amount;
-		require(acceptToken.transfer(msg.sender, _amount));
+		msg.sender.transfer(_amount);
 	}
 
 	function withdraw() external onlyOwner {
 		uint256 amount = _tax;
 		_tax = 0;
-		require(acceptToken.transfer(owner, amount));
+		owner.transfer(amount);
+	}
+
+	receive() external payable {
+		donate();
 	}
 }

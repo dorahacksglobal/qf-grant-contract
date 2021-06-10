@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.4;
+
+import { GrantRouter } from './GrantRouter.sol';
+import { Grant } from './Grant.sol';
+
+contract GrantFactory {
+	address payable public owner;
+
+  address public GRANT_MAIN;
+  address public GRANT_POOL;
+
+  constructor() {
+    owner = payable(msg.sender);
+  }
+
+  event NewRound();
+
+  function createRound(
+		uint256 _start,
+		uint256 _end,
+    address _token,
+		uint256 _votingUnit,
+		uint256 _votingPower
+  ) public {
+    GrantRouter r = new GrantRouter(this);
+    Grant g = Grant(payable(r));
+    g.initialize(this, payable(msg.sender), _start, _end, _token, _votingUnit, _votingPower);
+
+    emit NewRound();
+  }
+}

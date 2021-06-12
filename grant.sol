@@ -26,6 +26,8 @@ contract Grant {
 
   IDORAID constant public DORA_ID = IDORAID(0x1234567890123456789012345678901234567890);
 	uint256 constant public TAX_POINT = 500;
+	uint256 constant private UNIT = 10000;
+	uint256 constant private TAX_THRESHOLD = 5000 * UNIT;
 
 	bool public initialized;
 
@@ -35,6 +37,7 @@ contract Grant {
 	uint256 public currentRound = 0;
 	uint256 public startTime;
 	uint256 public endTime;
+	bool public progressiveTax;
 
 	address private _acceptToken;
 
@@ -59,6 +62,7 @@ contract Grant {
 	uint256 public supportPool;
 	uint256 public preTaxSupportPool;
 	uint256 private _totalSupportArea;
+	uint256 private _topArea;
 
 	mapping(uint256 => bool) public ban;
 	mapping(uint256 => mapping(address => uint256)) private _votesRecord;
@@ -72,7 +76,8 @@ contract Grant {
 		uint256 _end,
 		address _token,
 		uint256 _votingUnit,
-		uint256 _votingPower
+		uint256 _votingPower,
+		bool _progressiveTax
 	) public {
 		require(!initialized);
 		initialized = true;
@@ -84,6 +89,7 @@ contract Grant {
 		_acceptToken = _token;
 		basicVotingUnit = _votingUnit;
 		votingPower = _votingPower;
+		progressiveTax = _progressiveTax;
 	}
 
 	event BanProject(uint256 indexed project, bool ban);
@@ -236,7 +242,7 @@ contract Grant {
 			require(_amount == msg.value);
 		}
 
-		uint256 fee = _amount.mul(TAX_POINT) / 10000;
+		uint256 fee = _amount.mul(TAX_POINT) / UNIT;
 		uint256 support = _amount - fee;
 		_tax += fee;
 		supportPool += support;
@@ -271,26 +277,42 @@ contract Grant {
 			}
 		}
 
-		uint256 fee = cost.mul(TAX_POINT) / 10000;
+		uint256 fee = cost.mul(TAX_POINT) / UNIT;
 		uint256 grants = cost - fee;
 		_tax += fee;
 
 		project.votes[msg.sender] += _votes;
 		project.grants += grants;
 		_votesRecord[_projectID][msg.sender] += grants;
-		uint256 supportArea = _votes.mul(project.totalVotes - voted);
+		uint256 supportArea = _votes.mul(project.totalVotes - voted).mul(UNIT);
 
-		if (votingPower > 10000) {
+		if (votingPower > UNIT) {
 			(bool authenticated, uint256 stakingAmount, uint256 stakingEndTime) = DORA_ID.statusOf(msg.sender);
 			if (authenticated && stakingAmount > 10 ether && stakingEndTime >= endTime) {
-				supportArea = supportArea.mul(votingPower) / 10000;
+				supportArea = supportArea.mul(votingPower) / UNIT;
+			}
+		}
+
+		uint256 area = project.supportArea;
+		if (progressiveTax && _topArea > 0 && _totalSupportArea > 0) {
+			if (area > TAX_THRESHOLD) {
+				uint256 k1 = area.mul(UNIT) / _topArea;						// absolutely less than 1
+				uint256 k2 = area.mul(UNIT) / _totalSupportArea;	// absolutely less than 1
+				// assert(k1 <= UNIT && k2 <= UNIT);
+				uint256 k = UNIT - k1.mul(k2) / UNIT;
+
+				supportArea = supportArea.mul(k).mul(k) / UNIT / UNIT;
 			}
 		}
 
 		project.totalVotes += _votes;
-		project.supportArea = supportArea.add(project.supportArea);
+		project.supportArea = supportArea.add(area);
 		if (!ban[_projectID]) {
 			_totalSupportArea = supportArea.add(_totalSupportArea);
+		}
+
+		if (project.supportArea > _topArea) {
+			_topArea = project.supportArea;
 		}
 
 		emit Vote(msg.sender, _projectID, _votes);

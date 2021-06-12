@@ -21,11 +21,12 @@ contract GrantFactory {
 		uint256 _end,
     address _token,
 		uint256 _votingUnit,
-		uint256 _votingPower
+		uint256 _votingPower,
+    bool _progressiveTax
   ) public {
     GrantRouter r = new GrantRouter(this);
     Grant g = Grant(payable(r));
-    g.initialize(this, payable(msg.sender), _start, _end, _token, _votingUnit, _votingPower);
+    g.initialize(this, payable(msg.sender), _start, _end, _token, _votingUnit, _votingPower, _progressiveTax);
 
     emit NewRound();
   }

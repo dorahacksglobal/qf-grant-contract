@@ -24,7 +24,7 @@ library SafeMath {
 contract Grant {
 	using SafeMath for uint256;
 
-  IDORAID constant public DORA_ID = IDORAID(0x1234567890123456789012345678901234567890);
+  IDORAID constant public DORA_ID = IDORAID(0x53262b47178797eF8E777C6F0b0AE09eA85d9e33);
 	uint256 constant public TAX_POINT = 500;
 	uint256 constant private UNIT = 10000;
 	uint256 constant private TAX_THRESHOLD = 5000 * UNIT;
@@ -281,6 +281,7 @@ contract Grant {
 		uint256 grants = cost - fee;
 		_tax += fee;
 
+		uint256 voted = project.votes[msg.sender];
 		project.votes[msg.sender] += _votes;
 		project.grants += grants;
 		_votesRecord[_projectID][msg.sender] += grants;
@@ -359,6 +360,6 @@ contract Grant {
 
 	receive() external payable {
 		require(!_isERC20Round());
-		donate.value(msg.value)(msg.value);
+		donate(msg.value);
 	}
 }

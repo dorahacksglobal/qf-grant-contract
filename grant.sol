@@ -24,7 +24,7 @@ library SafeMath {
 contract Grant {
 	using SafeMath for uint256;
 
-  IDORAID constant public DORA_ID = IDORAID(0x53262b47178797eF8E777C6F0b0AE09eA85d9e33);
+  IDORAID constant public DORA_ID = IDORAID(0xfDaC13AAf14Fb3A814f43C65F497c4547e288B4c);
 	uint256 constant public TAX_POINT = 500;
 	uint256 constant private UNIT = 10000;
 	uint256 constant private TAX_THRESHOLD = 5000 * UNIT;
@@ -252,7 +252,7 @@ contract Grant {
 	function uploadProject(uint256 _projectID) external {
 		require(block.timestamp > startTime);
 		require(block.timestamp < endTime);
-		require(address(bytes20(bytes32(_projectID))) == msg.sender);
+		require(address(uint160(_projectID)) == msg.sender);
 		Project storage project = _projects[_projectID];
 		require(project.createAt == 0);
 		project.round = currentRound;
@@ -320,7 +320,7 @@ contract Grant {
 	}
 
 	function takeOutGrants(uint256 _projectID, uint256 _amount) external {
-		require(address(bytes20(bytes32(_projectID))) == msg.sender);
+		require(address(uint160(_projectID)) == msg.sender);
 		Project storage project = _projects[_projectID];
 		(uint256 rest, ) = grantsOf(_projectID);
 		require(rest >= _amount);

@@ -24,7 +24,10 @@ library SafeMath {
 contract Grant {
 	using SafeMath for uint256;
 
-  IDORAID constant public DORA_ID = IDORAID(0xfDaC13AAf14Fb3A814f43C65F497c4547e288B4c);
+  IDORAID constant public DORA_ID = IDORAID(0xA8f56d0506738c7f4400Ae9d8811538A85907287);
+	uint256 constant public STAKING_AMOUNT = 30 ether;
+	uint256 constant public STAKING_PERIOD = 5 days;
+
 	uint256 constant public TAX_POINT = 500;
 	uint256 constant private UNIT = 10000;
 	uint256 constant private TAX_THRESHOLD = 5000 * UNIT;
@@ -194,19 +197,31 @@ contract Grant {
 		return _votesRecord[_projectID][_user];
 	}
 
-	// function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
-	// 	require(!roundEnd);
-	// 	startTime = _start;
-	// 	endTime = _end;
-	// }
-	// function dangerSetArea(uint256 _projectID, uint256 _supportArea) external onlyOwner {
-	// 	Project storage project = _projects[_projectID];
-	// 	require(!roundEnd);
-	// 	require(!ban[_projectID]);
+	function doraIDRequirement(address, bytes memory) public view returns (bool, uint256, uint256) {
+		return (true, STAKING_AMOUNT, endTime + STAKING_PERIOD);
+	}
 
-	// 	_totalSupportArea = _totalSupportArea.add(_supportArea) - project.supportArea;
-	// 	project.supportArea = _supportArea;
-	// }
+	function isRespectable(address _user) public view returns (bool) {
+		(bool authenticated, uint256 stakingAmount, uint256 stakingEndTime) = DORA_ID.statusOf(_user);
+		return authenticated &&
+			stakingAmount > STAKING_AMOUNT &&
+			stakingEndTime >= endTime + STAKING_PERIOD;
+	}
+
+	function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
+		require(!roundEnd);
+		startTime = _start;
+		endTime = _end;
+	}
+
+	function dangerSetArea(uint256 _projectID, uint256 _supportArea) external onlyOwner {
+		Project storage project = _projects[_projectID];
+		require(!roundEnd);
+		require(!ban[_projectID]);
+
+		_totalSupportArea = _totalSupportArea.add(_supportArea) - project.supportArea;
+		project.supportArea = _supportArea;
+	}
 
 	function roundOver() external onlyOwner {
 		require(block.timestamp > endTime && endTime > 0);
@@ -287,11 +302,8 @@ contract Grant {
 		_votesRecord[_projectID][msg.sender] += grants;
 		uint256 supportArea = _votes.mul(project.totalVotes - voted).mul(UNIT);
 
-		if (votingPower > UNIT) {
-			(bool authenticated, uint256 stakingAmount, uint256 stakingEndTime) = DORA_ID.statusOf(msg.sender);
-			if (authenticated && stakingAmount > 10 ether && stakingEndTime >= endTime) {
-				supportArea = supportArea.mul(votingPower) / UNIT;
-			}
+		if (votingPower > UNIT && isRespectable(msg.sender)) {
+			supportArea = supportArea.mul(votingPower) / UNIT;
 		}
 
 		uint256 area = project.supportArea;

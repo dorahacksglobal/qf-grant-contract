@@ -239,10 +239,8 @@ contract Grant {
 		ban[_projectID] = _ban;
 		if (_ban) {
 			_totalSupportArea -= project.supportArea;
-			_tax += project.grants;
 		} else {
 			_totalSupportArea = project.supportArea.add(_totalSupportArea);
-			_tax -= project.grants;
 		}
 		emit BanProject(_projectID, _ban);
 	}

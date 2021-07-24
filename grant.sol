@@ -126,7 +126,7 @@ contract Grant {
 			uint256 pid = projects[i];
 			votes[i] = _projects[pid].totalVotes;
 			support[i] = ban[pid] ? 0 : _projects[pid].supportArea;
-			grants[i] = ban[pid] ? 0 : _projects[pid].grants;
+			grants[i] = _projects[pid].grants;
 		}
 	}
 
@@ -165,11 +165,11 @@ contract Grant {
 
 	function grantsOf(uint256 _projectID) public view returns (uint256 rest, uint256 total) {
 		Project storage project = _projects[_projectID];
-		if (!roundEnd || ban[_projectID]) {
+		if (!roundEnd) {
 			return (0, 0);
 		}
 		total = project.grants;
-		if (_totalSupportArea != 0) {
+		if (!ban[_projectID] && _totalSupportArea != 0) {
 			total = total.add(project.supportArea.mul(supportPool) / _totalSupportArea);
 		}
 		require(total >= project.withdrew);
@@ -188,7 +188,7 @@ contract Grant {
 		round = project.round;
 		createAt = project.createAt;
 		totalVotes = project.totalVotes;
-		grants = ban[_projectID] ? 0 : project.grants;
+		grants = project.grants;
 		supportArea = ban[_projectID] ? 0 : project.supportArea;
 		withdrew = project.withdrew;
 	}

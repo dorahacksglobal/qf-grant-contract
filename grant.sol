@@ -72,6 +72,8 @@ contract Grant {
 
 	bool public roundEnd;
 
+  bool private _rentrancyLock;
+
 	function initialize (
 		GrantFactory _factory,
 		address payable _owner,
@@ -81,8 +83,9 @@ contract Grant {
 		uint256 _votingUnit,
 		uint256 _votingPower,
 		bool _progressiveTax
-	) public {
+	) external {
 		require(!initialized);
+		require(_owner != address(0));
 		initialized = true;
 
 		factory = _factory;
@@ -103,6 +106,16 @@ contract Grant {
 		require(msg.sender == owner);
 		_;
 	}
+
+  /**
+   * @dev Prevents a contract from calling itself, directly or indirectly.
+   */
+  modifier nonReentrant() {
+    require(!_rentrancyLock);
+    _rentrancyLock = true;
+    _;
+    _rentrancyLock = false;
+  }
 
 	function allProjects(uint256) external view returns (uint256[] memory projects) {
 		return _projectList;
@@ -197,7 +210,7 @@ contract Grant {
 		return _votesRecord[_projectID][_user];
 	}
 
-	function doraIDRequirement(address, bytes memory) public view returns (bool, uint256, uint256) {
+	function doraIDRequirement(address, bytes memory) external view returns (bool, uint256, uint256) {
 		return (true, STAKING_AMOUNT, endTime + STAKING_PERIOD);
 	}
 
@@ -210,6 +223,8 @@ contract Grant {
 
 	function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
 		require(!roundEnd);
+		require(_start < _end);
+
 		startTime = _start;
 		endTime = _end;
 	}
@@ -229,6 +244,7 @@ contract Grant {
 	}
 
 	function changeOwner(address payable _newOwner) external onlyOwner {
+		require(_newOwner != address(0));
 		owner = _newOwner;
 	}
 
@@ -245,7 +261,7 @@ contract Grant {
 		emit BanProject(_projectID, _ban);
 	}
 
-	function donate(uint256 _amount) public payable {
+	function donate(uint256 _amount) public nonReentrant payable {
 		require(!roundEnd);
 
 		if (_isERC20Round()) {
@@ -273,7 +289,7 @@ contract Grant {
 		_projectList.push(_projectID);
 	}
 
-	function vote(uint256 _projectID, uint256 _votes) external payable {
+	function vote(uint256 _projectID, uint256 _votes) external nonReentrant payable {
 		require(block.timestamp < endTime);
 		Project storage project = _projects[_projectID];
 
@@ -329,7 +345,7 @@ contract Grant {
 		emit Vote(msg.sender, _projectID, _votes);
 	}
 
-	function takeOutGrants(uint256 _projectID, uint256 _amount) external {
+	function takeOutGrants(uint256 _projectID, uint256 _amount) external nonReentrant {
 		require(address(uint160(_projectID)) == msg.sender);
 		Project storage project = _projects[_projectID];
 		(uint256 rest, ) = grantsOf(_projectID);
@@ -345,7 +361,7 @@ contract Grant {
 		}
 	}
 
-	function withdraw() external onlyOwner {
+	function withdraw() external nonReentrant onlyOwner {
 		uint256 amount = _tax;
 		_tax = 0;
 

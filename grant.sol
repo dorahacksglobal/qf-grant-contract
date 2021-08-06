@@ -28,7 +28,6 @@ contract Grant {
 	uint256 constant public STAKING_AMOUNT = 30 ether;
 	uint256 constant public STAKING_PERIOD = 5 days;
 
-	uint256 constant public TAX_POINT = 500;
 	uint256 constant private UNIT = 10000;
 	uint256 constant private TAX_THRESHOLD = 5000 * UNIT;
 
@@ -74,6 +73,15 @@ contract Grant {
 
   bool private _rentrancyLock;
 
+	// v2.1
+	uint256 public TAX_POINT;
+
+	// v2.2
+	mapping(uint256 => mapping(uint256 => address)) public voter;
+	mapping(uint256 => uint256) public votesCount;
+
+	uint256 public votingTime;
+
 	function initialize (
 		GrantFactory _factory,
 		address payable _owner,
@@ -96,6 +104,7 @@ contract Grant {
 		basicVotingUnit = _votingUnit;
 		votingPower = _votingPower;
 		progressiveTax = _progressiveTax;
+		TAX_POINT = 500;
 	}
 
 	event BanProject(uint256 indexed project, bool ban);
@@ -211,13 +220,13 @@ contract Grant {
 	}
 
 	function doraIDRequirement(address, bytes memory) external view returns (bool, uint256, uint256) {
-		return (true, STAKING_AMOUNT, endTime + STAKING_PERIOD);
+		return (votingPower > UNIT, STAKING_AMOUNT, endTime + STAKING_PERIOD);
 	}
 
 	function isRespectable(address _user) public view returns (bool) {
 		(bool authenticated, uint256 stakingAmount, uint256 stakingEndTime) = DORA_ID.statusOf(_user);
 		return authenticated &&
-			stakingAmount > STAKING_AMOUNT &&
+			stakingAmount >= STAKING_AMOUNT &&
 			stakingEndTime >= endTime + STAKING_PERIOD;
 	}
 
@@ -236,6 +245,14 @@ contract Grant {
 
 		_totalSupportArea = _totalSupportArea.add(_supportArea) - project.supportArea;
 		project.supportArea = _supportArea;
+	}
+
+	function setVotingTime(uint256 _ts) external onlyOwner {
+		votingTime = _ts;
+	}
+
+	function setTexPoint(uint256 _taxPoint) external onlyOwner {
+		TAX_POINT = _taxPoint;
 	}
 
 	function roundOver() external onlyOwner {
@@ -290,6 +307,7 @@ contract Grant {
 	}
 
 	function vote(uint256 _projectID, uint256 _votes) external nonReentrant payable {
+		require(votingTime == 0 || block.timestamp >= votingTime);
 		require(block.timestamp < endTime);
 		Project storage project = _projects[_projectID];
 
@@ -341,6 +359,10 @@ contract Grant {
 		if (project.supportArea > _topArea) {
 			_topArea = project.supportArea;
 		}
+
+		uint256 vcs = votesCount[_projectID];
+		voter[_projectID][vcs] = msg.sender;
+		votesCount[_projectID] = vcs + 1;
 
 		emit Vote(msg.sender, _projectID, _votes);
 	}

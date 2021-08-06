@@ -26,7 +26,7 @@ Fixed
 
 Hold
 
-This is left by the V1 contract for compatibility, and the data itself is meaningless.
+This is stayed to be compatible with the V1 contract interface and maintain consistency. The data itself is meaningless.
 
 #### CKP-06 | Wrong Logic In `banProject()`
 

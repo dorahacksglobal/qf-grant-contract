@@ -24,7 +24,7 @@ library SafeMath {
 contract Grant {
 	using SafeMath for uint256;
 
-  IDORAID constant public DORA_ID = IDORAID(0xA8f56d0506738c7f4400Ae9d8811538A85907287);
+	IDORAID constant public DORA_ID = IDORAID(0xA8f56d0506738c7f4400Ae9d8811538A85907287);
 	uint256 constant public STAKING_AMOUNT = 30 ether;
 	uint256 constant public STAKING_PERIOD = 5 days;
 
@@ -71,7 +71,7 @@ contract Grant {
 
 	bool public roundEnd;
 
-  bool private _rentrancyLock;
+	bool private _rentrancyLock;
 
 	// v2.1
 	uint256 public TAX_POINT;
@@ -116,15 +116,15 @@ contract Grant {
 		_;
 	}
 
-  /**
-   * @dev Prevents a contract from calling itself, directly or indirectly.
-   */
-  modifier nonReentrant() {
-    require(!_rentrancyLock);
-    _rentrancyLock = true;
-    _;
-    _rentrancyLock = false;
-  }
+	/**
+	 * @dev Prevents a contract from calling itself, directly or indirectly.
+	 */
+	modifier nonReentrant() {
+		require(!_rentrancyLock);
+		_rentrancyLock = true;
+		_;
+		_rentrancyLock = false;
+	}
 
 	function allProjects(uint256) external view returns (uint256[] memory projects) {
 		return _projectList;

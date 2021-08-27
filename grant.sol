@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.4;
 
-import { IDORAID } from "./interface/DoraID.sol";
 import { IERC20 } from "./interface/IERC20.sol";
 import { GrantFactory } from './GrantFactory.sol';
 
@@ -24,38 +23,33 @@ library SafeMath {
 contract Grant {
 	using SafeMath for uint256;
 
-	IDORAID constant public DORA_ID = IDORAID(0xA8f56d0506738c7f4400Ae9d8811538A85907287);
-	uint256 constant public STAKING_AMOUNT = 30 ether;
-	uint256 constant public STAKING_PERIOD = 5 days;
+	enum ProjectStatus {
+		Normal,
+		Restricted,
+		Banned
+	}
 
 	uint256 constant private UNIT = 10000;
 	uint256 constant private TAX_THRESHOLD = 5000 * UNIT;
 
-	bool public initialized;
-
 	address payable public owner;
 	GrantFactory public factory;
 
-	uint256 public currentRound = 0;
 	uint256 public startTime;
 	uint256 public endTime;
-	bool public progressiveTax;
+	bool public roundEnd;
 
 	address private _acceptToken;
-
 	uint256 public basicVotingUnit;
-	uint256 public votingPower;
-
-	uint256 private _tax;
 
 	struct Project {
-		uint256 round;
 		uint256 createAt;
 		mapping (address => uint256) votes;
 		uint256 totalVotes;
 		uint256 grants;
 		uint256 supportArea;
 		uint256 withdrew;
+		ProjectStatus status;
 	}
 
 	mapping(uint256 => Project) private _projects;
@@ -63,34 +57,20 @@ contract Grant {
 
 	uint256 public supportPool;
 	uint256 public preTaxSupportPool;
-	uint256 private _totalSupportArea;
-	uint256 private _topArea;
-
-	mapping(uint256 => bool) public ban;
-	mapping(uint256 => mapping(address => uint256)) private _votesRecord;
-
-	bool public roundEnd;
-
-	bool private _rentrancyLock;
-
-	// v2.1
-	uint256 public TAX_POINT;
-
-	// v2.2
+	// uint256 private _totalSupportArea;
+	// uint256 private _topArea;
 	mapping(uint256 => mapping(uint256 => address)) public voter;
 	mapping(uint256 => uint256) public votesCount;
+	mapping(uint256 => mapping(address => uint256)) private _votesRecord;
 
-	uint256 public votingTime;
+	bool public initialized;
+	bool private _rentrancyLock;
 
 	function initialize (
 		GrantFactory _factory,
 		address payable _owner,
-		uint256 _start,
-		uint256 _end,
-		address _token,
-		uint256 _votingUnit,
-		uint256 _votingPower,
-		bool _progressiveTax
+		uint256[] memory _params, // start, end, votingUnit
+		address _token
 	) external {
 		require(!initialized);
 		require(_owner != address(0));
@@ -98,17 +78,13 @@ contract Grant {
 
 		factory = _factory;
 		owner = _owner;
-		startTime = _start;
-		endTime = _end;
+		startTime = _params[0];
+		endTime = _params[1];
+		basicVotingUnit = _params[2];
 		_acceptToken = _token;
-		basicVotingUnit = _votingUnit;
-		votingPower = _votingPower;
-		progressiveTax = _progressiveTax;
-		TAX_POINT = 500;
 	}
 
-	event BanProject(uint256 indexed project, bool ban);
-
+	event BanProject(uint256 indexed project, ProjectStatus status);
 	event Vote(address indexed account, uint256 indexed project, uint256 vote);
 	 
 	modifier onlyOwner() {
@@ -181,7 +157,7 @@ contract Grant {
 
 	function votingCost(address _from, uint256 _projectID, uint256 _votes) external view returns (uint256 cost, bool votable) {
 		Project storage project = _projects[_projectID];
-		votable = project.round == currentRound && block.timestamp < endTime;
+		votable = block.timestamp < endTime;
 		cost = _votingCost(_from, project, _votes);
 	}
 
@@ -219,17 +195,6 @@ contract Grant {
 		return _votesRecord[_projectID][_user];
 	}
 
-	function doraIDRequirement(address, bytes memory) external view returns (bool, uint256, uint256) {
-		return (votingPower > UNIT, STAKING_AMOUNT, endTime + STAKING_PERIOD);
-	}
-
-	function isRespectable(address _user) public view returns (bool) {
-		(bool authenticated, uint256 stakingAmount, uint256 stakingEndTime) = DORA_ID.statusOf(_user);
-		return authenticated &&
-			stakingAmount >= STAKING_AMOUNT &&
-			stakingEndTime >= endTime + STAKING_PERIOD;
-	}
-
 	function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
 		require(!roundEnd);
 		require(_start < _end);
@@ -251,10 +216,6 @@ contract Grant {
 		votingTime = _ts;
 	}
 
-	function setTexPoint(uint256 _taxPoint) external onlyOwner {
-		TAX_POINT = _taxPoint;
-	}
-
 	function roundOver() external onlyOwner {
 		require(block.timestamp > endTime && endTime > 0);
 		roundEnd = true;
@@ -265,17 +226,18 @@ contract Grant {
 		owner = _newOwner;
 	}
 
-	function banProject(uint256 _projectID, bool _ban) external onlyOwner {
+	function banProject(uint256 _projectID, ProjectStatus _status) external onlyOwner {
 		Project storage project = _projects[_projectID];
 		require(!roundEnd);
-		require(ban[_projectID] != _ban);
-		ban[_projectID] = _ban;
-		if (_ban) {
-			_totalSupportArea -= project.supportArea;
-		} else {
-			_totalSupportArea = project.supportArea.add(_totalSupportArea);
-		}
-		emit BanProject(_projectID, _ban);
+		// require(ban[_projectID] != _ban);
+		// ban[_projectID] = _ban;
+		// if (_ban) {
+		// 	_totalSupportArea -= project.supportArea;
+		// } else {
+		// 	_totalSupportArea = project.supportArea.add(_totalSupportArea);
+		// }
+		project.status = _status;
+		emit BanProject(_projectID, _status);
 	}
 
 	function donate(uint256 _amount) public nonReentrant payable {
@@ -301,7 +263,6 @@ contract Grant {
 		require(address(uint160(_projectID)) == msg.sender);
 		Project storage project = _projects[_projectID];
 		require(project.createAt == 0);
-		project.round = currentRound;
 		project.createAt = block.timestamp;
 		_projectList.push(_projectID);
 	}
@@ -334,21 +295,17 @@ contract Grant {
 		_votesRecord[_projectID][msg.sender] += grants;
 		uint256 supportArea = _votes.mul(project.totalVotes - voted).mul(UNIT);
 
-		if (votingPower > UNIT && isRespectable(msg.sender)) {
-			supportArea = supportArea.mul(votingPower) / UNIT;
-		}
-
 		uint256 area = project.supportArea;
-		if (progressiveTax && _topArea > 0 && _totalSupportArea > 0) {
-			if (area > TAX_THRESHOLD) {
-				uint256 k1 = area.mul(UNIT) / _topArea;						// absolutely less than 1
-				uint256 k2 = area.mul(UNIT) / _totalSupportArea;	// absolutely less than 1
-				// assert(k1 <= UNIT && k2 <= UNIT);
-				uint256 k = UNIT - k1.mul(k2) / UNIT;
+		// if (progressiveTax && _topArea > 0 && _totalSupportArea > 0) {
+		// 	if (area > TAX_THRESHOLD) {
+		// 		uint256 k1 = area.mul(UNIT) / _topArea;						// absolutely less than 1
+		// 		uint256 k2 = area.mul(UNIT) / _totalSupportArea;	// absolutely less than 1
+		// 		// assert(k1 <= UNIT && k2 <= UNIT);
+		// 		uint256 k = UNIT - k1.mul(k2) / UNIT;
 
-				supportArea = supportArea.mul(k).mul(k) / UNIT / UNIT;
-			}
-		}
+		// 		supportArea = supportArea.mul(k).mul(k) / UNIT / UNIT;
+		// 	}
+		// }
 
 		project.totalVotes += _votes;
 		project.supportArea = supportArea.add(area);

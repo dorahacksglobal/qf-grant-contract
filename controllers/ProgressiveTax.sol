@@ -8,7 +8,7 @@ contract ProgressiveTaxCon is GrantStore, Controller {
 	uint256 private constant UNIT = 1000000;
 	uint256 public constant TAX_THRESHOLD = 5000 * UNIT;
 
-	function handleVote(uint256, uint256 _projectId, uint256, address) external view override returns (bool pass, uint256 weight) {
+	function handleVote(uint256, uint256 _projectId, uint256, address) external payable override returns (bool pass, uint256 weight) {
 		Project storage project = _projects[_projectId];
 		uint256 area = project.supportArea;
 		if (_topArea == 0 || _totalSupportArea == 0 || area <= TAX_THRESHOLD) {

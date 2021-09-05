@@ -83,4 +83,6 @@ contract GrantFactory {
 
 		emit NewRound(address(g));
 	}
+	
+	receive () external payable {}
 }

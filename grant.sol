@@ -2,10 +2,10 @@
 pragma solidity 0.8.4;
 
 import { IERC20 } from "./interface/IERC20.sol";
-import { GrantFactory } from './GrantFactory.sol';
+import { GrantFactory } from "./GrantFactory.sol";
 
-import { GrantStore } from './libs/store.sol';
-import { Controller } from './controllers/base.sol';
+import { GrantStore } from "./libs/store.sol";
+import { Controller } from "./controllers/base.sol";
 
 library SafeMath {
 	function add(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -48,8 +48,8 @@ contract Grant is GrantStore {
 		basicVotingUnit = _params[2];
 		_acceptToken = _token;
 		for (uint256 i = 0; i < _consIdx.length; i++) {
-			consIdx[i] = _consIdx[i];
-			consParams[i] = _consParams[i];
+			consIdx.push(_consIdx[i]);
+			consParams.push(_consParams[i]);
 		}
 	}
 
@@ -259,7 +259,7 @@ contract Grant is GrantStore {
 
 		for (uint256 i = 0; i < consIdx.length; i++) {
 			(bool ok, bytes memory data) = address(factory.controller(consIdx[i])).delegatecall(
-				abi.encodeWithSignature('handleVote(uint256,uint256,uint256,address)', i, _projectId, _votes, msg.sender)
+				abi.encodeWithSignature("handleVote(uint256,uint256,uint256,address)", i, _projectId, _votes, msg.sender)
 			);
 			require(ok);
 			(bool pass, uint256 k) = abi.decode(data, (bool, uint256));

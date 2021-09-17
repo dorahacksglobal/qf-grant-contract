@@ -208,9 +208,12 @@ contract Grant is GrantStore {
 
 		uint256 fee = factory.tax(_amount);
 		if (_isERC20Round()) {
+			address sender = msg.sender;
+			if (sender == address(factory)) {
+				sender = owner;
+			}
 			IERC20 acceptToken = IERC20(_acceptToken);
-			require(acceptToken.transferFrom(msg.sender, address(this), _amount));
-			require(acceptToken.transfer(address(factory), fee));
+			factory.collectToken(acceptToken, sender, _amount);
 		} else {
 			require(_amount == msg.value);
 			payable(address(factory)).transfer(fee);
@@ -242,8 +245,7 @@ contract Grant is GrantStore {
 
 		if (_isERC20Round()) {
 			IERC20 acceptToken = IERC20(_acceptToken);
-			require(acceptToken.transferFrom(msg.sender, address(this), cost));
-			require(acceptToken.transfer(address(factory), fee));
+			factory.collectToken(acceptToken, msg.sender, cost);
 		} else {
 			require(msg.value >= cost);
 			uint256 rest = msg.value - grants;

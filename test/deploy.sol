@@ -11,7 +11,7 @@ import { ProgressiveTaxCon } from '../controllers/ProgressiveTax.sol';
 contract test {
   event C(address addr, string name);
 
-  function deploy() external {
+  function deploy() external payable {
     GrantFactory f = new GrantFactory();
     Grant g = new Grant();
     f.setTaxPoint(10000);
@@ -32,7 +32,7 @@ contract test {
     bytes[] memory conp = new bytes[](2);
     conp[0] = abi.encode(msg.sender);
 
-    f.createRound(params, address(0), idx, conp);
+    f.createRound{ value: msg.value }(params, address(0), msg.value, idx, conp);
 
     emit C(address(f), "factory");
     emit C(address(f.grants(0)), "grant");

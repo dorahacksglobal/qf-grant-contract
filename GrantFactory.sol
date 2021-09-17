@@ -13,7 +13,8 @@ contract GrantFactory {
 	address public GRANT_MAIN;
 	uint256 public TAX_POINT;
 
-	mapping(uint256 => address) public grants; 
+	mapping(address => bool) public isGrant;
+	mapping(uint256 => address) public grants;
 	uint256 public grantCount; 
 
 	mapping (uint256 => Controller) private _controller;
@@ -38,6 +39,7 @@ contract GrantFactory {
 	}
 	
 	function setTaxPoint(uint256 _tax) external onlyOwner {
+		require(_tax <= 1000000);
 		TAX_POINT = _tax;
 		emit Tax(_tax);
 	}
@@ -55,7 +57,7 @@ contract GrantFactory {
 		require(_token.transfer(owner, _amount));
 	}
 
-	function tax(uint256 _input) view external returns (uint256) {
+	function tax(uint256 _input) view public returns (uint256) {
 		if (_input == 0) {
 			return 0;
 		}
@@ -71,17 +73,28 @@ contract GrantFactory {
 	function createRound(
 		uint256[] memory _params, // start, end, votingUnit
 		address _token,
+		uint256 _amount,
 		uint256[] memory _consIdx,
 		bytes[] memory _consParams
-	) public {
+	) public payable {
 		GrantRouter r = new GrantRouter(this);
 		Grant g = Grant(payable(r));
 		g.initialize(this, payable(msg.sender), _params, _token, _consIdx, _consParams);
+
+		isGrant[address(g)] = true;
+		g.donate{ value: msg.value }(_amount);
 
 		grants[grantCount] = address(r);
 		grantCount++;
 
 		emit NewRound(address(g));
+	}
+
+	function collectToken(IERC20 _token, address _spender, uint256 _amount) external payable {
+		require(isGrant[msg.sender]);
+		uint256 afterTax = _amount - tax(_amount);
+		require(_token.transferFrom(_spender, address(this), _amount));
+		require(_token.transfer(msg.sender, afterTax));
 	}
 	
 	receive () external payable {}

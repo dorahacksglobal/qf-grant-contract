@@ -3,30 +3,11 @@ pragma solidity 0.8.4;
 
 import { IERC20 } from "./interface/IERC20.sol";
 import { GrantFactory } from "./GrantFactory.sol";
-
-import { GrantStore } from "./libs/store.sol";
+import { GrantModel } from "./GrantModel.sol";
 import { Controller } from "./controllers/base.sol";
 
-library SafeMath {
-	function add(uint256 a, uint256 b) internal pure returns (uint256) {
-		uint256 c = a + b;
-		assert(c >= a);
-		return c;
-	}
-	function mul(uint256 a, uint256 b) internal pure returns (uint256) {
-		if (b == 0) {
-			return 0;
-		}
-		uint256 c = a * b;
-		assert(c / b == a);
-		return c;
-	}
-}
-
-contract Grant is GrantStore {
-	using SafeMath for uint256;
-
-  uint256 private constant UNIT = 1000000;
+contract Grant is GrantModel {
+	uint256 private constant UNIT = 1000000;
 
 	function initialize (
 		GrantFactory _factory,
@@ -39,6 +20,7 @@ contract Grant is GrantStore {
 		require(!initialized);
 		require(_owner != address(0));
 		require(_consIdx.length == _consParams.length);
+		require(_params[2] < 1e24, "safemath");
 		initialized = true;
 
 		factory = _factory;
@@ -70,115 +52,6 @@ contract Grant is GrantStore {
 		_;
 		_rentrancyLock = false;
 	}
-
-	function allProjects(uint256) external view returns (uint256[] memory projects) {
-		return _projectList;
-	}
-
-	function rankingList(uint256) external view returns (
-		uint256 unit,
-		uint256[] memory projects,
-		uint256[] memory votes,
-		uint256[] memory support,
-		uint256[] memory grants
-	) {
-		if (_totalSupportArea != 0) {
-			unit = supportPool / _totalSupportArea;
-		}
-		projects = _projectList;
-		votes = new uint256[](projects.length);
-		support = new uint256[](projects.length);
-		grants = new uint256[](projects.length);
-		for (uint256 i = 0; i < projects.length; i++) {
-			uint256 pid = projects[i];
-			Project storage project = _projects[pid];
-			votes[i] = project.totalVotes;
-			support[i] = project.status == ProjectStatus.Normal ? project.supportArea : 0;
-			grants[i] = project.grants;
-		}
-	}
-
-	function roundInfo(uint256) external view returns (
-		uint256 startFrom,
-		uint256 endAt,
-		uint256 support,
-		uint256 preTaxSupport
-	) {
-		return (
-			startTime,
-			endTime,
-			supportPool,
-			preTaxSupportPool
-		);
-	}
-
-	function acceptTokenInfo() external view returns (
-		address token,
-		string memory symbol,
-		uint256 decimals
-	) {
-		require(_isERC20Round());
-
-		IERC20 acceptToken = IERC20(_acceptToken);
-		token = address(acceptToken);
-		symbol = acceptToken.symbol();
-		decimals = acceptToken.decimals();
-	}
-
-	function votingCost(address _from, uint256 _projectId, uint256 _votes) external view returns (uint256 cost, bool votable) {
-		Project storage project = _projects[_projectId];
-		votable = block.timestamp < endTime;
-		cost = _votingCost(_from, project, _votes);
-	}
-
-	function grantsOf(uint256 _projectId) public view returns (uint256 rest, uint256 total) {
-		Project storage project = _projects[_projectId];
-		if (!roundEnd) {
-			return (0, 0);
-		}
-		total = project.grants;
-		if (project.status == ProjectStatus.Normal && _totalSupportArea != 0) {
-			total += project.supportArea * supportPool / _totalSupportArea;
-		}
-		require(total >= project.withdrew);
-		rest = total - project.withdrew;
-	}
-
-	function projectOf(uint256 _projectId) external view returns (
-		uint256 createAt,
-		uint256 totalVotes,
-		uint256 grants,
-		uint256 supportArea,
-		uint256 withdrew
-	) {
-		Project storage project = _projects[_projectId];
-		createAt = project.createAt;
-		totalVotes = project.totalVotes;
-		grants = project.grants;
-		supportArea = project.status == ProjectStatus.Normal ? project.supportArea : 0;
-		withdrew = project.withdrew;
-	}
-
-	function votesOf(uint256 _projectId, address _user) external view returns (uint256) {
-		return _votesRecord[_projectId][_user];
-	}
-
-	// function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
-	// 	require(!roundEnd);
-	// 	require(_start < _end);
-
-	// 	startTime = _start;
-	// 	endTime = _end;
-	// }
-
-	// function dangerSetArea(uint256 _projectId, uint256 _supportArea) external onlyOwner {
-	// 	Project storage project = _projects[_projectId];
-	// 	require(!roundEnd);
-	// 	require(project.status == ProjectStatus.Normal);
-
-	// 	_totalSupportArea = _totalSupportArea.add(_supportArea) - project.supportArea;
-	// 	project.supportArea = _supportArea;
-	// }
 
 	function roundOver() external onlyOwner {
 		require(block.timestamp > endTime && endTime > 0);
@@ -234,8 +107,19 @@ contract Grant is GrantStore {
 		_projectList.push(_projectId);
 	}
 
-	function vote(uint256 _projectId, uint256 _votes) external nonReentrant payable {
-		require(block.timestamp < endTime);
+	function voteSimulation(address _voter, uint256 _projectId, uint256 _votes) external returns (uint256, uint256) {
+		require (msg.sender == address(0), "only queries are allowed");
+
+		Project storage project = _projects[_projectId];
+		uint256 m0 = _matchingOf(project);
+		_processVoteAndArea(_projectId, _voter, 1);
+		uint256 m1 = _matchingOf(project);
+		_processVoteAndArea(_projectId, _voter, _votes);
+		uint256 m2 = _matchingOf(project);
+		return (m1 - m0, m2 - m0);
+	}
+
+	function vote(uint256 _projectId, uint256 _votes) public nonReentrant payable {
 		Project storage project = _projects[_projectId];
 		require(project.totalVotes < 1e30);
 
@@ -252,37 +136,15 @@ contract Grant is GrantStore {
 			payable(address(factory)).transfer(rest);
 		}
 
-		uint256 voted = project.votes[msg.sender];
-		project.votes[msg.sender] += _votes;
 		project.grants += grants;
 		_votesRecord[_projectId][msg.sender] += grants;
 
-		uint256 addedArea = _votes * (project.totalVotes - voted) * UNIT;
-
-		for (uint256 i = 0; i < consIdx.length; i++) {
-			(bool ok, bytes memory data) = address(factory.controller(consIdx[i])).delegatecall(
-				abi.encodeWithSignature("handleVote(uint256,uint256,uint256,address)", i, _projectId, _votes, msg.sender)
-			);
-			require(ok);
-			(bool pass, uint256 k) = abi.decode(data, (bool, uint256));
-			require(pass);
-			addedArea = addedArea * k / UNIT;
-		}
-
-		project.totalVotes += _votes;
-		project.supportArea = addedArea + project.supportArea;
-		if (project.status == ProjectStatus.Normal) {
-			_totalSupportArea = addedArea + _totalSupportArea;
-		}
-
-		if (project.supportArea > _topArea) {
-			_topArea = project.supportArea;
-		}
+		_processVoteAndArea(_projectId, msg.sender, _votes);
 
 		uint256 vcs = votesCount[_projectId];
 		voter[_projectId][vcs] = msg.sender;
 		votesCount[_projectId] = vcs + 1;
-
+		
 		emit Vote(msg.sender, _projectId, _votes);
 	}
 
@@ -302,15 +164,32 @@ contract Grant is GrantStore {
 		}
 	}
 
-	function _votingCost(address _from, Project storage project, uint256 _votes) internal view returns (uint256 cost) {
-		uint256 voted = project.votes[_from];
-		uint256 votingPoints = _votes.mul(_votes.add(1)) / 2;
-		votingPoints = votingPoints.add(_votes.mul(voted));
-		cost = votingPoints.mul(basicVotingUnit);
-	}
+	function _processVoteAndArea(uint256 _projectId, address sender, uint256 _votes) internal {
+		Project storage project = _projects[_projectId];
+		uint256 voted = project.votes[sender];
+		project.votes[sender] += _votes;
 
-	function _isERC20Round() internal view returns (bool) {
-		return _acceptToken != address(0);
+		uint256 addedArea = _votes * (project.totalVotes - voted) * UNIT;
+
+		for (uint256 i = 0; i < consIdx.length; i++) {
+			(bool ok, bytes memory data) = address(factory.controller(consIdx[i])).delegatecall(
+				abi.encodeWithSignature("handleVote(uint256,uint256,uint256,address)", i, _projectId, _votes, sender)
+			);
+			require(ok);
+			(bool pass, uint256 k) = abi.decode(data, (bool, uint256));
+			require(pass);
+			addedArea = addedArea * k / UNIT;
+		}
+
+		project.totalVotes += _votes;
+		project.supportArea = addedArea + project.supportArea;
+		if (project.status == ProjectStatus.Normal) {
+			_totalSupportArea = addedArea + _totalSupportArea;
+		}
+
+		if (project.supportArea > _topArea) {
+			_topArea = project.supportArea;
+		}
 	}
 
 	receive() external payable {

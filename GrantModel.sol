@@ -98,7 +98,7 @@ contract GrantModel is GrantStore {
 		return _votesRecord[_projectId][_user];
 	}
 
-	function _matchingOf(Project storage project) internal returns (uint256) {
+	function _matchingOf(Project storage project) internal view returns (uint256) {
 		if (_totalSupportArea == 0) {
 			return 0;
 		}

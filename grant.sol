@@ -24,7 +24,7 @@ library SafeMath {
 contract Grant {
 	using SafeMath for uint256;
 
-	IDORAID constant public DORA_ID = IDORAID(0xA8f56d0506738c7f4400Ae9d8811538A85907287);
+	IDORAID constant public DORA_ID = IDORAID(0x0000000000000000000000000000000000000000);
 	uint256 constant public STAKING_AMOUNT = 30 ether;
 	uint256 constant public STAKING_PERIOD = 5 days;
 
@@ -306,6 +306,18 @@ contract Grant {
 		_projectList.push(_projectID);
 	}
 
+	function voteSimulation(address _voter, uint256 _projectId, uint256 _votes) external returns (uint256, uint256) {
+		require (msg.sender == address(0), "only queries are allowed");
+
+		Project storage project = _projects[_projectId];
+		uint256 m0 = _matchingOf(project);
+		_processVoteAndArea(_projectId, _voter, 1);
+		uint256 m1 = _matchingOf(project);
+		_processVoteAndArea(_projectId, _voter, _votes);
+		uint256 m2 = _matchingOf(project);
+		return (m1 - m0, m2 - m0);
+	}
+
 	function vote(uint256 _projectID, uint256 _votes) external nonReentrant payable {
 		require(votingTime == 0 || block.timestamp >= votingTime);
 		require(block.timestamp < endTime);
@@ -328,13 +340,26 @@ contract Grant {
 		uint256 grants = cost - fee;
 		_tax += fee;
 
-		uint256 voted = project.votes[msg.sender];
-		project.votes[msg.sender] += _votes;
 		project.grants += grants;
 		_votesRecord[_projectID][msg.sender] += grants;
+		
+		_processVoteAndArea(_projectID, msg.sender, _votes);
+
+		uint256 vcs = votesCount[_projectID];
+		voter[_projectID][vcs] = msg.sender;
+		votesCount[_projectID] = vcs + 1;
+
+		emit Vote(msg.sender, _projectID, _votes);
+	}
+
+	function _processVoteAndArea(uint256 _projectID, address sender, uint256 _votes) internal {
+		Project storage project = _projects[_projectID];
+		uint256 voted = project.votes[sender];
+		project.votes[sender] += _votes;
+
 		uint256 supportArea = _votes.mul(project.totalVotes - voted).mul(UNIT);
 
-		if (votingPower > UNIT && isRespectable(msg.sender)) {
+		if (votingPower > UNIT && isRespectable(sender)) {
 			supportArea = supportArea.mul(votingPower) / UNIT;
 		}
 
@@ -359,12 +384,6 @@ contract Grant {
 		if (project.supportArea > _topArea) {
 			_topArea = project.supportArea;
 		}
-
-		uint256 vcs = votesCount[_projectID];
-		voter[_projectID][vcs] = msg.sender;
-		votesCount[_projectID] = vcs + 1;
-
-		emit Vote(msg.sender, _projectID, _votes);
 	}
 
 	function takeOutGrants(uint256 _projectID, uint256 _amount) external nonReentrant {
@@ -393,6 +412,13 @@ contract Grant {
 		} else {
 			owner.transfer(amount);
 		}
+	}
+
+	function _matchingOf(Project storage project) internal view returns (uint256) {
+		if (_totalSupportArea == 0) {
+			return 0;
+		}
+		return project.supportArea * supportPool / _totalSupportArea;
 	}
 
 	function _votingCost(address _from, Project storage project, uint256 _votes) internal view returns (uint256 cost) {

@@ -10,6 +10,14 @@ contract GrantModel is GrantStore {
 		return _projectList;
 	}
 
+	function projectStatus(uint256[] memory pIds) external view returns (ProjectStatus[] memory status) {
+		status = new ProjectStatus[](pIds.length);
+		for (uint256 i = 0; i < pIds.length; i++) {
+			Project storage project = _projects[pIds[i]];
+			status[i] = project.status;
+		}
+	}
+
 	function rankingList(uint256) external view returns (
 		uint256 unit,
 		uint256[] memory projects,
@@ -100,6 +108,9 @@ contract GrantModel is GrantStore {
 
 	function _matchingOf(Project storage project) internal view returns (uint256) {
 		if (_totalSupportArea == 0) {
+			return 0;
+		}
+		if (project.status != ProjectStatus.Normal) {
 			return 0;
 		}
 		return project.supportArea * supportPool / _totalSupportArea;

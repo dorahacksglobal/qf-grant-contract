@@ -106,6 +106,12 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
 		require(votable);
 		require(msg.value >= cost);
 
+		uint256 projectContribution = _totalContribution[_p][msg.sender];
+		_totalContribution[_p][msg.sender] = projectContribution + cost;
+		if (projectContribution == 0) {
+			_projects[_p].voters++;
+		}
+
 		uint256 rest = msg.value - cost;
 		if (rest > 0) {
 			_tax = _tax + rest;
@@ -131,9 +137,11 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
 		uint256 totalArea = round.totalAreaCategorial[category];
 		uint256 topArea = round.topAreaCategorial[category];
 	
+		uint256 userVoted = round.voted[_p][_from];
 		uint256 incArea = _votes * (
-			round.votes[_p] - round.voted[_p][_from]
+			round.votes[_p] - userVoted
 		) * UNIT;
+		round.voted[_p][_from] += _votes;
 
 		uint256 area = round.areas[_p];
 		if (topArea > 0 && totalArea > 0) {
@@ -148,6 +156,9 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
 		}
 		uint256 newArea = area + incArea;
 
+		if (userVoted == 0) {
+			round.voters[_p]++;
+		}
 		round.votes[_p] += _votes;
 		round.areas[_p] = newArea;
 

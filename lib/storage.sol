@@ -14,12 +14,13 @@ abstract contract GrantStorage {
 
     uint256 votePrice;
 
+		mapping (uint256 => uint256) voters;
 		mapping (uint256 => uint256) votes;
 		mapping (uint256 => uint256) contribution;
 		mapping (uint256 => uint256) areas;
 		mapping (uint256 => bool) withdrew;
 
-		mapping (uint256 => mapping(address => uint256)) voted;
+		mapping (uint256 => mapping (address => uint256)) voted;
 	
 		mapping (uint256 => bool) hasCategory;
 		uint256[] category;
@@ -34,6 +35,7 @@ abstract contract GrantStorage {
     uint256 categoryIdx;
     uint256 participationRoundIdx;
 		uint256 validRound;
+		uint256 voters;
 	}
 
 	uint256 constant internal UNIT = 1000000;
@@ -44,7 +46,8 @@ abstract contract GrantStorage {
 
   uint256 public currentRound;
 
-	mapping(uint256 => Project) internal _projects;
+	mapping (uint256 => Project) internal _projects;
+	mapping (uint256 => mapping (address => uint256)) internal _totalContribution;
 	mapping(uint256 => Round) internal _rounds;
 	uint256[] internal _projectList;
 	uint256 internal _tax;
@@ -58,6 +61,7 @@ abstract contract GrantStorage {
 
 	function rankingList(uint256 _r) external view returns (
 		uint256[] memory projects,
+		uint256[] memory voters,
 		uint256[] memory votes,
 		uint256[] memory areas,
 		uint256[] memory contribution
@@ -67,6 +71,7 @@ abstract contract GrantStorage {
 
 	function rankingListPaged(uint256 _r, uint256 _page, uint256 _size) public view returns (
 		uint256[] memory projects,
+		uint256[] memory voters,
 		uint256[] memory votes,
 		uint256[] memory areas,
 		uint256[] memory contribution
@@ -79,12 +84,14 @@ abstract contract GrantStorage {
 				l = _projectList.length - start;
 			}
 			projects = new uint256[](l);
+			voters = new uint256[](l);
 			votes = new uint256[](l);
 			areas = new uint256[](l);
 			contribution = new uint256[](l);
 			for (uint256 i = 0; i < l; i++) {
 				uint256 pid = _projectList[start + i];
 				projects[i] = pid;
+				voters[i] = round.voters[pid];
 				votes[i] = round.votes[pid];
 				areas[i] = round.areas[pid];
 				contribution[i] = round.contribution[pid];

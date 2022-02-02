@@ -26,6 +26,7 @@ contract GrantAdmin is GrantStorage {
 		round.votePrice = _votePrice;
 
 		uint256 prev = 0;
+		round.category.push(0);
 		for (uint256 i = 0; i < _category.length; i++) {
 			uint256 curr = _category[i];
 			require(curr > prev);

@@ -61,6 +61,7 @@ abstract contract GrantStorage {
 
 	function rankingList(uint256 _r) external view returns (
 		uint256[] memory projects,
+		uint256[] memory category,
 		uint256[] memory voters,
 		uint256[] memory votes,
 		uint256[] memory areas,
@@ -71,6 +72,7 @@ abstract contract GrantStorage {
 
 	function rankingListPaged(uint256 _r, uint256 _page, uint256 _size) public view returns (
 		uint256[] memory projects,
+		uint256[] memory category,
 		uint256[] memory voters,
 		uint256[] memory votes,
 		uint256[] memory areas,
@@ -84,6 +86,7 @@ abstract contract GrantStorage {
 				l = _projectList.length - start;
 			}
 			projects = new uint256[](l);
+			category = new uint256[](l);
 			voters = new uint256[](l);
 			votes = new uint256[](l);
 			areas = new uint256[](l);
@@ -91,6 +94,7 @@ abstract contract GrantStorage {
 			for (uint256 i = 0; i < l; i++) {
 				uint256 pid = _projectList[start + i];
 				projects[i] = pid;
+				category[i] = _projects[pid].categoryIdx;
 				voters[i] = round.voters[pid];
 				votes[i] = round.votes[pid];
 				areas[i] = round.areas[pid];

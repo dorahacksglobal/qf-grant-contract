@@ -20,6 +20,7 @@ contract GrantAdmin is GrantStorage {
 	function roundStart(uint256 _startAt, uint256 _endAt, uint256 _votePrice, uint256[] memory _category) external onlyOwner {
 		Round storage round = _rounds[currentRound];
 		require(round.startAt == 0);
+		require(_endAt > _startAt, "invalid range");
 
 		round.startAt = _startAt;	
 		round.endAt = _endAt;
@@ -43,10 +44,13 @@ contract GrantAdmin is GrantStorage {
 	}
 
 	function setTexPoint(uint256 _taxPoint) external onlyOwner {
+		require(TAX_POINT <= UNIT);
 		TAX_POINT = _taxPoint;
 	}
 
 	function setRoundTime(uint256 _startAt, uint256 _endAt) external onlyOwner {
+		require(_endAt > _startAt, "invalid range");
+
 		Round storage round = _rounds[currentRound];
 		round.startAt = _startAt;
 		round.endAt = _endAt;

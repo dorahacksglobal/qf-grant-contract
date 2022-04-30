@@ -6,6 +6,7 @@ import { GrantStorage } from "./storage.sol";
 contract GrantAdmin is GrantStorage {
 	event BanProject(uint256 indexed project, bool banned);
 	event AdjustProjectArea(uint256 indexed round, uint256 indexed project, uint256 area, string reason);
+	event AdjustCategory(uint256 indexed round, uint256 indexed project, uint256 category);
 
 	modifier onlyOwner() {
 		require(msg.sender == owner);
@@ -72,7 +73,7 @@ contract GrantAdmin is GrantStorage {
 	// 	emit BanProject(_p, false);
 	// }
 
-	function adjustProjectArea(uint256 _p, uint256 _area, string memory _reason) external onlyOwner {
+	function adjustProjectArea(uint256 _p, uint256 _area, string memory _reason) public onlyOwner {
 		Round storage round = _rounds[currentRound];
 
 		uint256 category = _projects[_p].categoryIdx;
@@ -82,11 +83,30 @@ contract GrantAdmin is GrantStorage {
 
 		uint256 oriArea = round.areas[_p];
 		uint256 totalArea = round.totalAreaCategorial[category];
-		assert(totalArea + _area > totalArea);
+		assert(totalArea + _area >= totalArea);
 		
 		round.areas[_p] = _area;
 		round.totalAreaCategorial[category] = totalArea + _area - oriArea;
 
 		emit AdjustProjectArea(currentRound, _p, _area, _reason);
+	}
+
+	function adjustCategory (uint256 _p, uint256 _category) external onlyOwner {
+		Project storage project = _projects[_p];
+		require(project.status == ProjectStatus.Normal);
+		Round storage round = _rounds[currentRound];
+
+		if (block.timestamp > round.endAt) {
+			// after round end
+			project.validRound = currentRound + 1;
+		} else {
+			project.validRound = currentRound;
+			if (round.areas[_p] > 0) {
+				adjustProjectArea(_p, 0, "");
+			}
+		}
+		project.categoryIdx = _category;
+
+		emit AdjustCategory(currentRound, _p, _category);
 	}
 }

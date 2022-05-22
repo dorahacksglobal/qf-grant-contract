@@ -109,6 +109,33 @@ contract GrantAdmin is GrantStorage {
         emit AdjustProjectArea(currentRound, _p, _area, _reason);
     }
 
+    function batchAdjustProjectArea(
+        uint256[] calldata _p,
+        uint256[] calldata _area
+    ) public onlyOwner {
+        require(_p.length == _area.length);
+
+        Round storage round = _rounds[currentRound];
+
+        for (uint256 i = 0; i < _p.length; i++) {
+            uint256 p = _p[i];
+            uint256 area = _area[i];
+
+            uint256 category = _projects[p].categoryIdx;
+            if (!round.hasCategory[category]) {
+                category = 0;
+            }
+
+            uint256 oriArea = round.areas[p];
+            uint256 totalArea = round.totalAreaCategorial[category];
+
+            round.areas[p] = area;
+            round.totalAreaCategorial[category] = totalArea + area - oriArea;
+
+            emit AdjustProjectArea(currentRound, p, area, "");
+        }
+    }
+
     function adjustCategory(uint256 _p, uint256 _category) external onlyOwner {
         Project storage project = _projects[_p];
         require(project.status == ProjectStatus.Normal);

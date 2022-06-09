@@ -8,6 +8,13 @@ abstract contract GrantStorage {
         Banned
     }
 
+    struct Category {
+        uint256 topVotes;
+        uint256 minVotes; // min (but not zero) votes number
+        uint256 minVotesProject;
+        uint256 projectNumber;
+    }
+
     struct Round {
         uint256 startAt;
         uint256 endAt;
@@ -15,26 +22,31 @@ abstract contract GrantStorage {
         mapping(uint256 => uint256) voters;
         mapping(uint256 => uint256) votes;
         mapping(uint256 => uint256) contribution;
-        mapping(uint256 => uint256) areas;
+        mapping(uint256 => uint256) areas; // now, it's used as votes * UNIT
         mapping(uint256 => bool) withdrew;
         mapping(uint256 => mapping(address => uint256)) voted;
         mapping(uint256 => bool) hasCategory;
         uint256[] category;
         mapping(uint256 => uint256) matchingPoolCategorial;
-        mapping(uint256 => uint256) totalAreaCategorial;
-        mapping(uint256 => uint256) topAreaCategorial;
+        mapping(uint256 => uint256) totalVotesCategorial;
+        // VERSION 2.0 change: topVotesCategorial => categoryInfo
+        mapping(uint256 => Category) categoryInfo;
+        // VERSION 2.0 add
+        address roundSinger;
+        mapping(uint256 => bool) validProjects;
+        mapping(address => bool) whitelistVoter;
     }
 
     struct Project {
         ProjectStatus status;
         uint256 categoryIdx;
-        uint256 participationRoundIdx;
+        uint256 participationRoundIdx; // ! useless
         uint256 validRound;
         uint256 voters;
     }
 
     uint256 internal constant UNIT = 1000000;
-    uint256 internal constant TAX_THRESHOLD = 5000 * UNIT;
+    uint256 internal constant TAX_THRESHOLD = 5000 * UNIT; // ! useless
     uint256 public TAX_POINT;
 
     address payable public owner;
@@ -42,6 +54,7 @@ abstract contract GrantStorage {
     uint256 public currentRound;
 
     mapping(uint256 => Project) internal _projects;
+    // project => user => contribution
     mapping(uint256 => mapping(address => uint256)) internal _totalContribution;
     mapping(uint256 => Round) internal _rounds;
     uint256[] internal _projectList;
@@ -49,6 +62,9 @@ abstract contract GrantStorage {
 
     bool public initialized;
     bool internal _rentrancyLock;
+
+    // VERSION 2.0 add
+    uint256 internal R;
 
     function projectOf(uint256 _p) external view returns (Project memory) {
         return _projects[_p];
@@ -130,7 +146,7 @@ abstract contract GrantStorage {
         totalArea = new uint256[](category.length);
         for (uint256 i = 0; i < category.length; i++) {
             matchingPool[i] = round.matchingPoolCategorial[category[i]];
-            totalArea[i] = round.totalAreaCategorial[category[i]];
+            totalArea[i] = round.totalVotesCategorial[category[i]];
         }
     }
 }

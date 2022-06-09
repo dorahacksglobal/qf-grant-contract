@@ -27,10 +27,15 @@ contract GrantAdmin is GrantStorage {
         owner = _newOwner;
     }
 
+    function setDistributionRatio(uint256 _r) external onlyOwner {
+        R = _r;
+    }
+
     function roundStart(
         uint256 _startAt,
         uint256 _endAt,
         uint256 _votePrice,
+        address _signer,
         uint256[] memory _category
     ) external onlyOwner {
         Round storage round = _rounds[currentRound];
@@ -41,6 +46,8 @@ contract GrantAdmin is GrantStorage {
         round.endAt = _endAt;
         round.votePrice = _votePrice;
 
+        round.roundSinger = _signer;
+
         uint256 prev = 0;
         round.category.push(0);
         for (uint256 i = 0; i < _category.length; i++) {
@@ -50,6 +57,14 @@ contract GrantAdmin is GrantStorage {
             round.category.push(curr);
 
             prev = curr;
+        }
+    }
+
+    function setValidProjects(uint256[] calldata _p) external onlyOwner {
+        mapping(uint256 => bool) storage validPorjects = _rounds[currentRound]
+            .validProjects;
+        for (uint256 i = 0; i < _p.length; i++) {
+            validPorjects[_p[i]] = true;
         }
     }
 
@@ -100,11 +115,11 @@ contract GrantAdmin is GrantStorage {
         }
 
         uint256 oriArea = round.areas[_p];
-        uint256 totalArea = round.totalAreaCategorial[category];
+        uint256 totalArea = round.totalVotesCategorial[category];
         assert(totalArea + _area >= totalArea);
 
         round.areas[_p] = _area;
-        round.totalAreaCategorial[category] = totalArea + _area - oriArea;
+        round.totalVotesCategorial[category] = totalArea + _area - oriArea;
 
         emit AdjustProjectArea(currentRound, _p, _area, _reason);
     }
@@ -127,10 +142,10 @@ contract GrantAdmin is GrantStorage {
             }
 
             uint256 oriArea = round.areas[p];
-            uint256 totalArea = round.totalAreaCategorial[category];
+            uint256 totalArea = round.totalVotesCategorial[category];
 
             round.areas[p] = area;
-            round.totalAreaCategorial[category] = totalArea + area - oriArea;
+            round.totalVotesCategorial[category] = totalArea + area - oriArea;
 
             emit AdjustProjectArea(currentRound, p, area, "");
         }
@@ -153,5 +168,25 @@ contract GrantAdmin is GrantStorage {
         project.categoryIdx = _category;
 
         emit AdjustCategory(currentRound, _p, _category);
+    }
+
+    function batchAdjustCategoryBeforeRoundStart(
+        uint256 _round,
+        uint256 _category,
+        uint256[] calldata _p
+    ) external onlyOwner {
+        Round storage round = _rounds[_round];
+        require(block.timestamp < round.startAt);
+
+        for (uint256 i = 0; i < _p.length; i++) {
+            uint256 p = _p[i];
+            Project storage project = _projects[p];
+            require(project.status == ProjectStatus.Normal);
+
+            project.validRound = _round;
+            project.categoryIdx = _category;
+
+            emit AdjustCategory(_round, p, _category);
+        }
     }
 }

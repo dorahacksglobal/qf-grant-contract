@@ -46,7 +46,8 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
 
         votable =
             project.status == ProjectStatus.Normal &&
-            project.participationRoundIdx >= currentRound &&
+            // project.participationRoundIdx >= currentRound &&
+            round.validProjects[_p] &&
             ongoing();
 
         uint256 voted = round.voted[_p][_from];
@@ -62,7 +63,7 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         Project storage project = _projects[_p];
 
         if (round.withdrew[_p]) return 0;
-        if (project.validRound > _r) return 0;
+        if (project.validRound > _r) return 0; // project category change
 
         uint256 category = project.categoryIdx;
         if (!round.hasCategory[category]) {
@@ -71,11 +72,31 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
 
         uint256 total = round.contribution[_p];
 
-        uint256 totalArea = round.totalAreaCategorial[category];
-        if (totalArea != 0) {
+        uint256 totalVotes = round.totalVotesCategorial[category];
+        uint256 votes = round.areas[_p];
+
+        if (_r > 1 && votes > 0) {
+            // from round 2
+            Category storage categoryInfo = round.categoryInfo[category];
+
+            uint256 a = totalVotes / categoryInfo.projectNumber; // averageVotes
+            uint256 t = categoryInfo.topVotes; // topVotes
+            uint256 m = categoryInfo.minVotes; // minVotes
+
+            uint256 s = (a * (R - 1) * UNIT) / (t - a + (a - m) * R);
+            if (s < UNIT) {
+                if (votes > a) {
+                    votes = a + ((votes - a) * s) / UNIT;
+                } else {
+                    votes = votes + ((a - votes) * (UNIT - s)) / UNIT;
+                }
+            }
+        }
+
+        if (totalVotes != 0) {
             total +=
-                (round.areas[_p] * round.matchingPoolCategorial[category]) /
-                totalArea;
+                (votes * round.matchingPoolCategorial[category]) /
+                totalVotes;
         }
         return total;
     }
@@ -108,8 +129,31 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         _projectList.push(_projectId);
     }
 
-    function vote(uint256 _p, uint256 _votes) external payable nonReentrant {
+    function vote(
+        uint256 _p,
+        uint256 _votes,
+        bytes calldata _sign
+    ) external payable {
+        if (_sign.length == 65) {
+            Round storage round = _rounds[currentRound];
+            bytes32 h = keccak256(
+                abi.encodePacked(address(this), currentRound, msg.sender)
+            );
+            uint8 v = uint8(bytes1(_sign[64:]));
+            (bytes32 r, bytes32 s) = abi.decode(_sign[:64], (bytes32, bytes32));
+            address signer = ecrecover(h, v, r, s);
+            if (signer == round.roundSinger) {
+                round.whitelistVoter[msg.sender] = true;
+            }
+        }
+        vote(_p, _votes);
+    }
+
+    function vote(uint256 _p, uint256 _votes) public payable nonReentrant {
+        require(_votes > 0);
+
         Round storage round = _rounds[currentRound];
+        require(round.whitelistVoter[msg.sender]);
 
         (uint256 cost, bool votable) = votingCost(msg.sender, _p, _votes);
         require(votable);
@@ -148,35 +192,31 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
             category = 0;
         }
 
-        uint256 totalArea = round.totalAreaCategorial[category];
-        uint256 topArea = round.topAreaCategorial[category];
+        Category storage categoryInfo = round.categoryInfo[category];
 
-        uint256 userVoted = round.voted[_p][_from];
-        uint256 incArea = _votes * (round.votes[_p] - userVoted) * UNIT;
-        round.voted[_p][_from] += _votes;
-
-        uint256 area = round.areas[_p];
-        if (topArea > 0 && totalArea > 0) {
-            if (area > TAX_THRESHOLD) {
-                uint256 k1 = (area * UNIT) / topArea; // absolutely less than 1
-                uint256 k2 = (area * UNIT) / totalArea; // absolutely less than 1
-                // assert(k1 <= UNIT && k2 <= UNIT);
-                uint256 k = UNIT - (k1 * k2) / UNIT;
-
-                incArea = (incArea * k * k) / UNIT / UNIT;
-            }
-        }
-        uint256 newArea = area + incArea;
-
-        if (userVoted == 0) {
+        if (round.voted[_p][_from] == 0) {
             round.voters[_p]++;
         }
+        round.voted[_p][_from] += _votes;
         round.votes[_p] += _votes;
+
+        if (round.areas[_p] == 0) {
+            categoryInfo.projectNumber++;
+        }
+        uint256 incArea = _votes * UNIT;
+        uint256 newArea = round.areas[_p] + incArea;
         round.areas[_p] = newArea;
 
-        round.totalAreaCategorial[category] += incArea;
-        if (newArea > topArea) {
-            round.topAreaCategorial[category] = newArea;
+        round.totalVotesCategorial[category] += incArea;
+        if (newArea > categoryInfo.topVotes) {
+            categoryInfo.topVotes = newArea;
+        }
+        uint256 minVotesProject = categoryInfo.minVotesProject;
+        if (minVotesProject == 0 || newArea < categoryInfo.minVotes) {
+            categoryInfo.minVotes = newArea;
+            categoryInfo.minVotesProject = _p;
+        } else if (minVotesProject == _p) {
+            categoryInfo.minVotes = newArea;
         }
     }
 
@@ -216,14 +256,6 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
 			return 0;
 		}
 		return project.supportArea * supportPool / _totalSupportArea;
-	}
-
-	function _votingCost(Round storage round, uint256 _p, address _from, uint256 _votes) internal view returns (uint256 cost) {
-		require(_votes < 1 ether);
-		uint256 voted = round.voted[_p][_from];
-		uint256 votingPoints = _votes * (_votes + 1) / 2;
-		votingPoints += _votes * voted;
-		cost = votingPoints * round.votePrice;
 	}
 */
 

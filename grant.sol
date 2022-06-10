@@ -25,8 +25,8 @@ library SafeMath {
 contract Grant {
     using SafeMath for uint256;
 
-    IDORAID public constant DORA_ID =
-        IDORAID(0x0000000000000000000000000000000000000000);
+    address public constant DORA_ID =
+        0x0000000000000000000000000000000000000000;
     uint256 public constant STAKING_AMOUNT = 30 ether;
     uint256 public constant STAKING_PERIOD = 5 days;
 
@@ -90,10 +90,10 @@ contract Grant {
         uint256 _start,
         uint256 _end,
         address _token,
-        uint256 _votingUnit,
-        // uint256 _votingPower,
-        // bool _progressiveTax
-    ) external {
+        uint256 _votingUnit
+    ) external // uint256 _votingPower,
+    // bool _progressiveTax
+    {
         require(!initialized);
         require(_owner != address(0));
         initialized = true;
@@ -291,9 +291,10 @@ contract Grant {
 
         uint256 newArea = _totalSupportArea;
         for (uint256 i = 0; i < _projectID.length; i++) {
-            Project storage project = _projects[_projectID];
-            newArea = newArea + _supportArea - project.supportArea;
-            project.supportArea = _supportArea;
+            Project storage project = _projects[_projectID[i]];
+            uint256 area = _supportArea[i];
+            newArea = newArea + area - project.supportArea;
+            project.supportArea = area;
         }
 
         _totalSupportArea = newArea;

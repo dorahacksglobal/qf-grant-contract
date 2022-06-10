@@ -36,9 +36,7 @@ contract GrantFactory {
             _start,
             _end,
             _token,
-            _votingUnit,
-            _votingPower,
-            _progressiveTax
+            _votingUnit
         );
 
         emit NewRound(address(g));

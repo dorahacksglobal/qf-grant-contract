@@ -64,6 +64,7 @@ abstract contract GrantStorage {
     bool internal _rentrancyLock;
 
     // VERSION 2.0 add
+    // distribution ratio
     uint256 internal R;
 
     function projectOf(uint256 _p) external view returns (Project memory) {

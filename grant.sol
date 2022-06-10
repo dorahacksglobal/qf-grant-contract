@@ -76,13 +76,17 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         uint256 votes = round.areas[_p];
 
         if (_r > 1 && votes > 0) {
-            // from round 2
+            // only from round 2
             Category storage categoryInfo = round.categoryInfo[category];
 
             uint256 a = totalVotes / categoryInfo.projectNumber; // averageVotes
             uint256 t = categoryInfo.topVotes; // topVotes
             uint256 m = categoryInfo.minVotes; // minVotes
 
+            // The number of final results of the first place is R times that of the last place.
+            // => a + s(t - a) = (a - s(a - m)) * R
+            // => s(t - a + (a - m) * R) = aR - a
+            // => s = a(R - 1) / (t - a + (a - m) * R)
             uint256 s = (a * (R - 1) * UNIT) / (t - a + (a - m) * R);
             if (s < UNIT) {
                 if (votes > a) {
@@ -135,6 +139,7 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         bytes calldata _sign
     ) external payable {
         if (_sign.length == 65) {
+            // proof of white list
             Round storage round = _rounds[currentRound];
             bytes32 h = keccak256(
                 abi.encodePacked(address(this), currentRound, msg.sender)

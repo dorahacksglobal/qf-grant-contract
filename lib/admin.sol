@@ -155,24 +155,29 @@ contract GrantAdmin is GrantStorage {
         }
     }
 
-    function adjustCategory(uint256 _p, uint256 _category) external onlyOwner {
-        Project storage project = _projects[_p];
-        require(project.status == ProjectStatus.Normal);
-        Round storage round = _rounds[currentRound];
+    // ! discard
+    // Using this method during round will cause problems in the statistics of
+    // `categoryInfo.projectNumber`, which will completely affect the calculation
+    // of matching pool distribution.
 
-        if (block.timestamp > round.endAt) {
-            // after round end
-            project.validRound = currentRound + 1;
-        } else {
-            project.validRound = currentRound;
-            if (round.areas[_p] > 0) {
-                adjustProjectArea(_p, 0, "");
-            }
-        }
-        project.categoryIdx = _category;
+    // function adjustCategory(uint256 _p, uint256 _category) external onlyOwner {
+    //     Project storage project = _projects[_p];
+    //     require(project.status == ProjectStatus.Normal);
+    //     Round storage round = _rounds[currentRound];
 
-        emit AdjustCategory(currentRound, _p, _category);
-    }
+    //     if (block.timestamp > round.endAt) {
+    //         // after round end
+    //         project.validRound = currentRound + 1;
+    //     } else {
+    //         project.validRound = currentRound;
+    //         if (round.areas[_p] > 0) {
+    //             adjustProjectArea(_p, 0, "");
+    //         }
+    //     }
+    //     project.categoryIdx = _category;
+
+    //     emit AdjustCategory(currentRound, _p, _category);
+    // }
 
     function batchAdjustCategoryBeforeRoundStart(
         uint256 _round,

@@ -148,6 +148,10 @@ contract GrantAdmin is GrantStorage {
             uint256 oriArea = round.areas[p];
             uint256 totalArea = round.totalVotesCategorial[category];
 
+            if (oriArea > 0 && area == 0) {
+                round.categoryInfo[category].projectNumber--;
+            }
+
             round.areas[p] = area;
             round.totalVotesCategorial[category] = totalArea + area - oriArea;
 

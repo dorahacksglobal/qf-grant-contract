@@ -87,12 +87,15 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
             // => a + s(t - a) = (a - s(a - m)) * R
             // => s(t - a + (a - m) * R) = aR - a
             // => s = a(R - 1) / (t - a + (a - m) * R)
-            uint256 s = (a * (R - 1) * UNIT) / (t - a + (a - m) * R);
-            if (s < UNIT) {
-                if (votes > a) {
-                    votes = a + ((votes - a) * s) / UNIT;
-                } else {
-                    votes = votes + ((a - votes) * (UNIT - s)) / UNIT;
+            uint256 d = t - a + (a - m) * R;
+            if (d > 0) {
+                uint256 s = (a * (R - 1) * UNIT) / d;
+                if (s < UNIT) {
+                    if (votes > a) {
+                        votes = a + ((votes - a) * s) / UNIT;
+                    } else {
+                        votes = votes + ((a - votes) * (UNIT - s)) / UNIT;
+                    }
                 }
             }
         }

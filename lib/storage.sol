@@ -46,7 +46,7 @@ abstract contract GrantStorage {
     }
 
     uint256 internal constant UNIT = 1000000;
-    uint256 internal constant TAX_THRESHOLD = 5000 * UNIT; // ! useless
+    // uint256 internal constant TAX_THRESHOLD = 5000 * UNIT; // ! useless
     uint256 public TAX_POINT;
 
     address payable public owner;

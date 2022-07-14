@@ -106,7 +106,7 @@ contract GrantAdmin is GrantStorage {
         uint256 _p,
         uint256 _area,
         string memory _reason
-    ) public onlyOwner {
+    ) external onlyOwner {
         Round storage round = _rounds[currentRound];
 
         uint256 category = _projects[_p].categoryIdx;
@@ -131,7 +131,7 @@ contract GrantAdmin is GrantStorage {
     function batchAdjustProjectArea(
         uint256[] calldata _p,
         uint256[] calldata _area
-    ) public onlyOwner {
+    ) external onlyOwner {
         require(_p.length == _area.length);
 
         Round storage round = _rounds[currentRound];

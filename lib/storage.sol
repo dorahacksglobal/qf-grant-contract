@@ -135,7 +135,10 @@ abstract contract GrantStorage {
             uint256 endAt,
             uint256[] memory category,
             uint256[] memory matchingPool,
-            uint256[] memory totalArea
+            uint256[] memory totalArea,
+            uint256[] memory topVotes,
+            uint256[] memory minVotes,
+            uint256[] memory projectNumber
         )
     {
         Round storage round = _rounds[_r];
@@ -143,11 +146,21 @@ abstract contract GrantStorage {
         endAt = round.endAt;
         category = round.category;
 
-        matchingPool = new uint256[](category.length);
-        totalArea = new uint256[](category.length);
+        uint256 l = category.length;
+        matchingPool = new uint256[](l);
+        totalArea = new uint256[](l);
+        topVotes = new uint256[](l);
+        minVotes = new uint256[](l);
+        projectNumber = new uint256[](l);
         for (uint256 i = 0; i < category.length; i++) {
-            matchingPool[i] = round.matchingPoolCategorial[category[i]];
-            totalArea[i] = round.totalVotesCategorial[category[i]];
+            uint256 c = category[i];
+            matchingPool[i] = round.matchingPoolCategorial[c];
+            totalArea[i] = round.totalVotesCategorial[c];
+
+            Category storage categoryInfo = round.categoryInfo[c];
+            topVotes[i] = categoryInfo.topVotes;
+            minVotes[i] = categoryInfo.minVotes;
+            projectNumber[i] = categoryInfo.projectNumber;
         }
     }
 }

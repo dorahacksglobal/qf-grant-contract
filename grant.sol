@@ -91,9 +91,7 @@ contract Grant {
         uint256 _end,
         address _token,
         uint256 _votingUnit
-    ) external // uint256 _votingPower,
-    // bool _progressiveTax
-    {
+    ) external {
         require(!initialized);
         require(_owner != address(0));
         initialized = true;

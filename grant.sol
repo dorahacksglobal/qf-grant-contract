@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.4;
+pragma solidity 0.8.6;
 
-// import {IDORAID} from "./interface/DoraID.sol";
 import {IERC20} from "./interface/IERC20.sol";
 import {GrantFactory} from "./GrantFactory.sol";
 
@@ -25,13 +24,7 @@ library SafeMath {
 contract Grant {
     using SafeMath for uint256;
 
-    address public constant DORA_ID =
-        0x0000000000000000000000000000000000000000;
-    uint256 public constant STAKING_AMOUNT = 30 ether;
-    uint256 public constant STAKING_PERIOD = 5 days;
-
-    uint256 private constant UNIT = 10000;
-    uint256 private constant TAX_THRESHOLD = 5000 * UNIT;
+    uint256 private constant UNIT = 1000000;
 
     bool public initialized;
 
@@ -41,19 +34,17 @@ contract Grant {
     uint256 public currentRound = 0;
     uint256 public startTime;
     uint256 public endTime;
-    bool public progressiveTax;
 
     address private _acceptToken;
 
     uint256 public basicVotingUnit;
-    uint256 public votingPower;
 
     uint256 private _tax;
 
     struct Project {
         uint256 round;
         uint256 createAt;
-        mapping(address => uint256) votes;
+        uint256 voters;
         uint256 totalVotes;
         uint256 grants;
         uint256 supportArea;
@@ -66,9 +57,13 @@ contract Grant {
     uint256 public supportPool;
     uint256 public preTaxSupportPool;
     uint256 private _totalSupportArea;
-    uint256 private _topArea;
 
-    mapping(uint256 => bool) public ban;
+    uint256 private _topArea;
+    uint256 private _minArea;
+    uint256 private _minAreaProject;
+    uint256 private _projectNumber;
+
+    // mapping(uint256 => bool) public ban;
     mapping(uint256 => mapping(address => uint256)) private _votesRecord;
 
     bool public roundEnd;
@@ -78,11 +73,11 @@ contract Grant {
     // v2.1
     uint256 public TAX_POINT;
 
-    // v2.2
-    mapping(uint256 => mapping(uint256 => address)) public voter;
-    mapping(uint256 => uint256) public votesCount;
-
     uint256 public votingTime;
+
+    // VERSION 3.0 add
+    // distribution ratio
+    uint256 private R;
 
     function initialize(
         GrantFactory _factory,
@@ -102,12 +97,9 @@ contract Grant {
         endTime = _end;
         _acceptToken = _token;
         basicVotingUnit = _votingUnit;
-        // votingPower = _votingPower;
-        progressiveTax = true;
-        TAX_POINT = 500;
+        TAX_POINT = 50000;
+        R = 20;
     }
-
-    // event BanProject(uint256 indexed project, bool ban);
 
     event Vote(address indexed account, uint256 indexed project, uint256 vote);
 
@@ -138,39 +130,38 @@ contract Grant {
         external
         view
         returns (
-            uint256 unit,
             uint256[] memory projects,
+            uint256[] memory voters,
             uint256[] memory votes,
-            uint256[] memory support,
+            uint256[] memory area,
             uint256[] memory grants
         )
     {
-        if (_totalSupportArea != 0) {
-            unit = supportPool / _totalSupportArea;
-        }
         projects = _projectList;
+        voters = new uint256[](projects.length);
         votes = new uint256[](projects.length);
         support = new uint256[](projects.length);
         grants = new uint256[](projects.length);
         for (uint256 i = 0; i < projects.length; i++) {
             uint256 pid = projects[i];
+            voters[i] = _projects[pid].voters;
             votes[i] = _projects[pid].totalVotes;
-            support[i] = ban[pid] ? 0 : _projects[pid].supportArea;
+            support[i] = _projects[pid].supportArea;
             grants[i] = _projects[pid].grants;
         }
     }
 
-    function roundInfo(uint256)
-        external
-        view
-        returns (
-            uint256 startFrom,
-            uint256 endAt,
-            uint256 support,
-            uint256 preTaxSupport
-        )
-    {
-        return (startTime, endTime, supportPool, preTaxSupportPool);
+    function roundInfo(uint256) external view returns (uint256[8]) {
+        return [
+            startTime,
+            endTime,
+            supportPool,
+            preTaxSupportPool,
+            _totalSupportArea,
+            _topArea,
+            _minArea,
+            _projectNumber
+        ];
     }
 
     function acceptTokenInfo()
@@ -210,11 +201,34 @@ contract Grant {
             return (0, 0);
         }
         total = project.grants;
-        if (!ban[_projectID] && _totalSupportArea != 0) {
-            total = total.add(
-                project.supportArea.mul(supportPool) / _totalSupportArea
-            );
+
+        uint256 area = project.supportArea;
+        if (area > 0) {
+            uint256 a = _totalSupportArea / _projectNumber; // averageVotes
+            uint256 t = _topArea;
+            uint256 m = _minArea;
+
+            // The number of final results of the first place is R times that of the last place.
+            // => a + s(t - a) = (a - s(a - m)) * R
+            // => s(t - a + (a - m) * R) = aR - a
+            // => s = a(R - 1) / (t - a + (a - m) * R)
+            uint256 d = t - a + (a - m) * R;
+            if (d > 0) {
+                uint256 s = (a * (R - 1) * UNIT) / d;
+                if (s < UNIT) {
+                    if (area > a) {
+                        area = a + ((area - a) * s) / UNIT;
+                    } else {
+                        area = area + ((a - area) * (UNIT - s)) / UNIT;
+                    }
+                }
+            }
         }
+
+        if (_totalSupportArea != 0) {
+            total = total.add(area.mul(supportPool) / _totalSupportArea);
+        }
+
         require(total >= project.withdrew);
         rest = total - project.withdrew;
     }
@@ -222,22 +236,9 @@ contract Grant {
     function projectOf(uint256 _projectID)
         external
         view
-        returns (
-            uint256 round,
-            uint256 createAt,
-            uint256 totalVotes,
-            uint256 grants,
-            uint256 supportArea,
-            uint256 withdrew
-        )
+        returns (Project memory)
     {
-        Project storage project = _projects[_projectID];
-        round = project.round;
-        createAt = project.createAt;
-        totalVotes = project.totalVotes;
-        grants = project.grants;
-        supportArea = ban[_projectID] ? 0 : project.supportArea;
-        withdrew = project.withdrew;
+        return _projects[_projectID];
     }
 
     function votesOf(uint256 _projectID, address _user)
@@ -248,54 +249,12 @@ contract Grant {
         return _votesRecord[_projectID][_user];
     }
 
-    // function doraIDRequirement(address, bytes memory)
-    //     external
-    //     view
-    //     returns (
-    //         bool,
-    //         uint256,
-    //         uint256
-    //     )
-    // {
-    //     return (votingPower > UNIT, STAKING_AMOUNT, endTime + STAKING_PERIOD);
-    // }
-
-    // function isRespectable(address _user) public view returns (bool) {
-    //     (
-    //         bool authenticated,
-    //         uint256 stakingAmount,
-    //         uint256 stakingEndTime
-    //     ) = DORA_ID.statusOf(_user);
-    //     return
-    //         authenticated &&
-    //         stakingAmount >= STAKING_AMOUNT &&
-    //         stakingEndTime >= endTime + STAKING_PERIOD;
-    // }
-
-    function dangerSetTime(uint256 _start, uint256 _end) external onlyOwner {
+    function setTime(uint256 _start, uint256 _end) external onlyOwner {
         require(!roundEnd);
         require(_start < _end);
 
         startTime = _start;
         endTime = _end;
-    }
-
-    function dangerSetAreas(
-        uint256[] calldata _projectID,
-        uint256[] calldata _supportArea
-    ) external onlyOwner {
-        require(!roundEnd);
-        require(_projectID.length == _supportArea.length);
-
-        uint256 newArea = _totalSupportArea;
-        for (uint256 i = 0; i < _projectID.length; i++) {
-            Project storage project = _projects[_projectID[i]];
-            uint256 area = _supportArea[i];
-            newArea = newArea + area - project.supportArea;
-            project.supportArea = area;
-        }
-
-        _totalSupportArea = newArea;
     }
 
     function setVotingTime(uint256 _ts) external onlyOwner {
@@ -315,19 +274,6 @@ contract Grant {
         require(_newOwner != address(0));
         owner = _newOwner;
     }
-
-    // function banProject(uint256 _projectID, bool _ban) external onlyOwner {
-    //     Project storage project = _projects[_projectID];
-    //     require(!roundEnd);
-    //     require(ban[_projectID] != _ban);
-    //     ban[_projectID] = _ban;
-    //     if (_ban) {
-    //         _totalSupportArea -= project.supportArea;
-    //     } else {
-    //         _totalSupportArea = project.supportArea.add(_totalSupportArea);
-    //     }
-    //     emit BanProject(_projectID, _ban);
-    // }
 
     function donate(uint256 _amount) public payable nonReentrant {
         require(!roundEnd);
@@ -359,22 +305,6 @@ contract Grant {
         _projectList.push(_projectID);
     }
 
-    // function voteSimulation(
-    //     address _voter,
-    //     uint256 _projectId,
-    //     uint256 _votes
-    // ) external returns (uint256, uint256) {
-    //     require(msg.sender == address(0), "only queries are allowed");
-
-    //     Project storage project = _projects[_projectId];
-    //     uint256 m0 = _matchingOf(project);
-    //     _processVoteAndArea(_projectId, _voter, 1);
-    //     uint256 m1 = _matchingOf(project);
-    //     _processVoteAndArea(_projectId, _voter, _votes);
-    //     uint256 m2 = _matchingOf(project);
-    //     return (m1 - m0, m2 - m0);
-    // }
-
     function vote(uint256 _projectID, uint256 _votes)
         external
         payable
@@ -382,6 +312,7 @@ contract Grant {
     {
         require(votingTime == 0 || block.timestamp >= votingTime);
         require(block.timestamp < endTime);
+        require(_votes > 0);
         Project storage project = _projects[_projectID];
 
         uint256 cost = _votingCost(msg.sender, project, _votes);
@@ -402,13 +333,8 @@ contract Grant {
         _tax += fee;
 
         project.grants += grants;
-        _votesRecord[_projectID][msg.sender] += grants;
 
         _processVoteAndArea(_projectID, msg.sender, _votes);
-
-        uint256 vcs = votesCount[_projectID];
-        voter[_projectID][vcs] = msg.sender;
-        votesCount[_projectID] = vcs + 1;
 
         emit Vote(msg.sender, _projectID, _votes);
     }
@@ -419,35 +345,31 @@ contract Grant {
         uint256 _votes
     ) internal {
         Project storage project = _projects[_projectID];
-        uint256 voted = project.votes[sender];
-        project.votes[sender] += _votes;
-
-        uint256 supportArea = _votes.mul(project.totalVotes - voted).mul(UNIT);
-
-        // if (votingPower > UNIT && isRespectable(sender)) {
-        //     supportArea = supportArea.mul(votingPower) / UNIT;
-        // }
-
-        uint256 area = project.supportArea;
-        if (progressiveTax && _topArea > 0 && _totalSupportArea > 0) {
-            if (area > TAX_THRESHOLD) {
-                uint256 k1 = area.mul(UNIT) / _topArea; // absolutely less than 1
-                uint256 k2 = area.mul(UNIT) / _totalSupportArea; // absolutely less than 1
-                // assert(k1 <= UNIT && k2 <= UNIT);
-                uint256 k = UNIT - k1.mul(k2) / UNIT;
-
-                supportArea = supportArea.mul(k).mul(k) / UNIT / UNIT;
-            }
+        uint256 voted = _votesRecord[_projectID][sender];
+        if (voted == 0) {
+            project.voters++;
         }
+        _votesRecord[_projectID][sender] += _votes;
+
+        uint256 incArea = _votes.mul(project.totalVotes - voted).mul(UNIT);
 
         project.totalVotes += _votes;
-        project.supportArea = supportArea.add(area);
-        if (!ban[_projectID]) {
-            _totalSupportArea = supportArea.add(_totalSupportArea);
+        uint256 newArea = project.supportArea + incArea;
+
+        if (project.supportArea == 0 && incArea != 0) {
+            _projectNumber++;
         }
+        project.supportArea = newArea;
+        _totalSupportArea += newArea;
 
         if (project.supportArea > _topArea) {
             _topArea = project.supportArea;
+        }
+        if (_minAreaProject == 0 || newArea < _minArea) {
+            _minArea = newArea;
+            _minAreaProject = _p;
+        } else if (_minAreaProject == _p) {
+            _minArea = newArea;
         }
     }
 
@@ -481,17 +403,6 @@ contract Grant {
             owner.transfer(amount);
         }
     }
-
-    // function _matchingOf(Project storage project)
-    //     internal
-    //     view
-    //     returns (uint256)
-    // {
-    //     if (_totalSupportArea == 0) {
-    //         return 0;
-    //     }
-    //     return (project.supportArea * supportPool) / _totalSupportArea;
-    // }
 
     function _votingCost(
         address _from,

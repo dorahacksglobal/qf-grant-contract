@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.4;
+pragma solidity 0.8.6;
 
 import {GrantRouter} from "./GrantRouter.sol";
 import {Grant} from "./Grant.sol";
@@ -24,9 +24,7 @@ contract GrantFactory {
         uint256 _start,
         uint256 _end,
         address _token,
-        uint256 _votingUnit,
-        uint256 _votingPower,
-        bool _progressiveTax
+        uint256 _votingUnit
     ) public {
         GrantRouter r = new GrantRouter(this);
         Grant g = Grant(payable(r));

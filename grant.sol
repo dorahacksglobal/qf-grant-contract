@@ -133,7 +133,7 @@ contract Grant {
             uint256[] memory projects,
             uint256[] memory voters,
             uint256[] memory votes,
-            uint256[] memory area,
+            uint256[] memory support,
             uint256[] memory grants
         )
     {
@@ -151,7 +151,7 @@ contract Grant {
         }
     }
 
-    function roundInfo(uint256) external view returns (uint256[8]) {
+    function roundInfo(uint256) external view returns (uint256[8] memory) {
         return [
             startTime,
             endTime,
@@ -188,7 +188,7 @@ contract Grant {
     ) external view returns (uint256 cost, bool votable) {
         Project storage project = _projects[_projectID];
         votable = project.round == currentRound && block.timestamp < endTime;
-        cost = _votingCost(_from, project, _votes);
+        cost = _votingCost(_from, _projectID, _votes);
     }
 
     function grantsOf(uint256 _projectID)
@@ -315,7 +315,7 @@ contract Grant {
         require(_votes > 0);
         Project storage project = _projects[_projectID];
 
-        uint256 cost = _votingCost(msg.sender, project, _votes);
+        uint256 cost = _votingCost(msg.sender, _projectID, _votes);
 
         if (_isERC20Round()) {
             IERC20 acceptToken = IERC20(_acceptToken);
@@ -362,13 +362,13 @@ contract Grant {
         project.supportArea = newArea;
         _totalSupportArea += newArea;
 
-        if (project.supportArea > _topArea) {
-            _topArea = project.supportArea;
+        if (newArea > _topArea) {
+            _topArea = newArea;
         }
         if (_minAreaProject == 0 || newArea < _minArea) {
             _minArea = newArea;
-            _minAreaProject = _p;
-        } else if (_minAreaProject == _p) {
+            _minAreaProject = _projectID;
+        } else if (_minAreaProject == _projectID) {
             _minArea = newArea;
         }
     }
@@ -406,10 +406,10 @@ contract Grant {
 
     function _votingCost(
         address _from,
-        Project storage project,
+        uint256 _projectID,
         uint256 _votes
     ) internal view returns (uint256 cost) {
-        uint256 voted = project.votes[_from];
+        uint256 voted = _votesRecord[_projectID][_from];
         uint256 votingPoints = _votes.mul(_votes.add(1)) / 2;
         votingPoints = votingPoints.add(_votes.mul(voted));
         cost = votingPoints.mul(basicVotingUnit);

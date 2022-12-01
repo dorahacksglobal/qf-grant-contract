@@ -360,7 +360,7 @@ contract Grant {
             _projectNumber++;
         }
         project.supportArea = newArea;
-        _totalSupportArea += newArea;
+        _totalSupportArea += incArea;
 
         if (newArea > _topArea) {
             _topArea = newArea;
@@ -371,6 +371,15 @@ contract Grant {
         } else if (_minAreaProject == _projectID) {
             _minArea = newArea;
         }
+    }
+
+    function _fix() external {
+        uint256 total;
+        for (uint256 i = 0; i < _projectList.length; i++) {
+            uint256 pid = _projectList[i];
+            total += _projects[pid].supportArea;
+        }
+        _totalSupportArea = total;
     }
 
     function takeOutGrants(uint256 _projectID, uint256 _amount)

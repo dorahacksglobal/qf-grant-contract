@@ -70,6 +70,18 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         }
     }
 
+    function batchVotingInfo(address _from, uint256[] memory _p)
+        public
+        view
+        returns (uint256[] memory voted)
+    {
+        Round storage round = _rounds[currentRound];
+        voted = new uint256[](_p.length);
+        for (uint256 i = 0; i < _p.length; i++) {
+            voted[i] = round.voted[_p[i]][_from];
+        }
+    }
+
     function grantsOf(uint256 _r, uint256 _p) public view returns (uint256) {
         if (_r >= currentRound) return 0;
 

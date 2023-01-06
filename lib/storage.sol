@@ -69,7 +69,7 @@ abstract contract GrantStorage {
 
     // input: decimals 18
     // output: decimals 1
-    function log2(uint256 n) public pure returns (uint256) {
+    function log2(uint256 n) internal pure returns (uint256) {
         n = ((n + 2e18) * 256) / 1e18;
         uint256 d = 0;
         while (n > 50859008) {

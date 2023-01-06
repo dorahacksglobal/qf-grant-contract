@@ -56,6 +56,20 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         cost = votingPoints * round.votePrice;
     }
 
+    function batchVotingCost(
+        address _from,
+        uint256[] memory _p,
+        uint256[] memory _votes
+    ) public view returns (uint256 cost, bool votable) {
+        require(_p.length == _votes.length);
+        votable = true;
+        for (uint256 i = 0; i < _p.length; i++) {
+            (uint256 c, bool v) = votingCost(_from, _p[i], _votes[i]);
+            votable = votable && v;
+            cost = cost + c;
+        }
+    }
+
     function grantsOf(uint256 _r, uint256 _p) public view returns (uint256) {
         if (_r >= currentRound) return 0;
 

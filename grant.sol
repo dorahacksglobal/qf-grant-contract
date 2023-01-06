@@ -136,58 +136,133 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         _projectList.push(_projectId);
     }
 
-    function vote(
-        uint256 _p,
-        uint256 _votes,
+    // function vote(
+    //     uint256 _p,
+    //     uint256 _votes,
+    //     bytes calldata _sign
+    // ) external payable {
+    //     bytes calldata sign = _sign[:65];
+    //     uint256 balance = abi.decode(_sign[65:], (uint256));
+    //     // proof of white list
+    //     Round storage round = _rounds[currentRound];
+    //     bytes32 h = keccak256(
+    //         abi.encodePacked(address(this), currentRound, msg.sender, balance)
+    //     );
+    //     uint8 v = uint8(bytes1(sign[64:]));
+    //     (bytes32 r, bytes32 s) = abi.decode(sign[:64], (bytes32, bytes32));
+    //     address signer = ecrecover(h, v, r, s);
+
+    //     if (signer == round.roundSinger) {
+    //         round.whitelistVoter[msg.sender] = log2(balance);
+    //     }
+    //     vote(_p, _votes);
+    // }
+
+    function batchVote(
+        uint256[] memory _p,
+        uint256[] memory _votes,
         bytes calldata _sign
-    ) external payable {
-        if (_sign.length == 65) {
+    ) public payable nonReentrant {
+        require(_p.length == _votes.length);
+        Round storage round = _rounds[currentRound];
+
+        if (_sign.length >= 65) {
+            bytes calldata sign = _sign[:65];
+            uint256 balance = abi.decode(_sign[65:], (uint256));
             // proof of white list
-            Round storage round = _rounds[currentRound];
             bytes32 h = keccak256(
-                abi.encodePacked(address(this), currentRound, msg.sender)
+                abi.encodePacked(
+                    address(this),
+                    currentRound,
+                    msg.sender,
+                    balance
+                )
             );
-            uint8 v = uint8(bytes1(_sign[64:]));
-            (bytes32 r, bytes32 s) = abi.decode(_sign[:64], (bytes32, bytes32));
+            uint8 v = uint8(bytes1(sign[64:]));
+            (bytes32 r, bytes32 s) = abi.decode(sign[:64], (bytes32, bytes32));
             address signer = ecrecover(h, v, r, s);
+
             if (signer == round.roundSinger) {
-                round.whitelistVoter[msg.sender] = true;
+                round.whitelistVoter[msg.sender] = log2(balance);
             }
         }
-        vote(_p, _votes);
-    }
 
-    function vote(uint256 _p, uint256 _votes) public payable nonReentrant {
-        require(_votes > 0);
-
-        Round storage round = _rounds[currentRound];
-        require(round.whitelistVoter[msg.sender]);
-
-        (uint256 cost, bool votable) = votingCost(msg.sender, _p, _votes);
-        require(votable);
-        require(msg.value >= cost);
-
-        uint256 projectContribution = _totalContribution[_p][msg.sender];
-        _totalContribution[_p][msg.sender] = projectContribution + cost;
-        if (projectContribution == 0) {
-            _projects[_p].voters++;
+        uint256 weight = round.whitelistVoter[msg.sender];
+        if (weight <= 10) {
+            weight = 10;
         }
 
-        uint256 rest = msg.value - cost;
+        uint256 totalCost;
+        uint256 totalFee;
+        for (uint256 i = 0; i < _p.length; i++) {
+            uint256 p = _p[i];
+            uint256 votes = _votes[i];
+
+            require(votes > 0);
+            (uint256 cost, bool votable) = votingCost(msg.sender, p, votes);
+            require(votable);
+
+            uint256 projectContribution = _totalContribution[p][msg.sender];
+            _totalContribution[p][msg.sender] = projectContribution + cost;
+            if (projectContribution == 0) {
+                _projects[p].voters++;
+            }
+
+            uint256 fee = (cost * TAX_POINT) / UNIT;
+            uint256 contribution = cost - fee;
+
+            round.contribution[p] += contribution;
+
+            totalCost += cost;
+            totalFee += fee;
+
+            votes = (votes * weight) / 10;
+
+            _processVoteAndArea(round, p, msg.sender, votes);
+
+            emit Vote(msg.sender, p, votes);
+        }
+
+        require(msg.value >= totalCost);
+
+        uint256 rest = msg.value - totalCost;
         if (rest > 0) {
             _tax = _tax + rest;
         }
-
-        uint256 fee = (cost * TAX_POINT) / UNIT;
-        uint256 contribution = cost - fee;
-        _tax += fee;
-
-        round.contribution[_p] += contribution;
-
-        _processVoteAndArea(round, _p, msg.sender, _votes);
-
-        emit Vote(msg.sender, _p, _votes);
+        _tax += totalFee;
     }
+
+    // function vote(uint256 _p, uint256 _votes) public payable nonReentrant {
+    //     require(_votes > 0);
+
+    //     Round storage round = _rounds[currentRound];
+    //     // require(round.whitelistVoter[msg.sender]);
+
+    //     (uint256 cost, bool votable) = votingCost(msg.sender, _p, _votes);
+    //     require(votable);
+    //     require(msg.value >= cost);
+
+    //     uint256 projectContribution = _totalContribution[_p][msg.sender];
+    //     _totalContribution[_p][msg.sender] = projectContribution + cost;
+    //     if (projectContribution == 0) {
+    //         _projects[_p].voters++;
+    //     }
+
+    //     uint256 rest = msg.value - cost;
+    //     if (rest > 0) {
+    //         _tax = _tax + rest;
+    //     }
+
+    //     uint256 fee = (cost * TAX_POINT) / UNIT;
+    //     uint256 contribution = cost - fee;
+    //     _tax += fee;
+
+    //     round.contribution[_p] += contribution;
+
+    //     _processVoteAndArea(round, _p, msg.sender, _votes);
+
+    //     emit Vote(msg.sender, _p, _votes);
+    // }
 
     function _processVoteAndArea(
         Round storage round,

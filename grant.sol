@@ -242,7 +242,7 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
             totalCost += cost;
             totalFee += fee;
 
-            votes = (votes * weight) / 10;
+            votes = votes * weight;
 
             _processVoteAndArea(round, p, msg.sender, votes);
 

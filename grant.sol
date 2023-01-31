@@ -6,7 +6,7 @@ import {GrantAdmin} from "./lib/admin.sol";
 import {GrantUser} from "./lib/user.sol";
 
 contract Grant is GrantStorage, GrantAdmin, GrantUser {
-    event Vote(address indexed account, uint256 indexed project, uint256 vote);
+    event Vote(address indexed account, uint256 indexed project, uint256 vote, uint256 amount);
 
     /**
      * @dev Prevents a contract from calling itself, directly or indirectly.
@@ -246,7 +246,7 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
 
             _processVoteAndArea(round, p, msg.sender, votes);
 
-            emit Vote(msg.sender, p, votes);
+            emit Vote(msg.sender, p, votes, cost);
         }
 
         require(msg.value >= totalCost);

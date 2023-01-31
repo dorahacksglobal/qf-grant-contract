@@ -60,6 +60,11 @@ contract GrantAdmin is GrantStorage {
         }
     }
 
+    function _resetPool() external onlyOwner {
+        Round storage round = _rounds[currentRound];
+        round.matchingPoolCategorial[0] = 34.3 ether;
+    }
+
     function setValidProjects(uint256[] calldata _p) external onlyOwner {
         mapping(uint256 => bool) storage validPorjects = _rounds[currentRound]
             .validProjects;

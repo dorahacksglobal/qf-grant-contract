@@ -153,20 +153,20 @@ abstract contract GrantStorage {
         return _projects[_p];
     }
 
-    function rankingList(uint256 _r)
-        external
-        view
-        returns (
-            uint256[] memory projects,
-            uint256[] memory category,
-            uint256[] memory voters,
-            uint256[] memory votes,
-            uint256[] memory areas,
-            uint256[] memory contribution
-        )
-    {
-        return rankingListPaged(_r, 0, 1000);
-    }
+    // function rankingList(uint256 _r)
+    //     external
+    //     view
+    //     returns (
+    //         uint256[] memory projects,
+    //         uint256[] memory category,
+    //         uint256[] memory voters,
+    //         uint256[] memory votes,
+    //         uint256[] memory areas,
+    //         uint256[] memory contribution
+    //     )
+    // {
+    //     return rankingListPaged(_r, 0, 1000);
+    // }
 
     function rankingListPaged(
         uint256 _r,

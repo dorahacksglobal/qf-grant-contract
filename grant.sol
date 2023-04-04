@@ -6,7 +6,12 @@ import {GrantAdmin} from "./lib/admin.sol";
 import {GrantUser} from "./lib/user.sol";
 
 contract Grant is GrantStorage, GrantAdmin, GrantUser {
-    event Vote(address indexed account, uint256 indexed project, uint256 vote, uint256 amount);
+    event Vote(
+        address indexed account,
+        uint256 indexed project,
+        uint256 vote,
+        uint256 amount
+    );
 
     /**
      * @dev Prevents a contract from calling itself, directly or indirectly.
@@ -50,7 +55,7 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
             round.validProjects[_p] &&
             ongoing();
 
-        uint256 voted = round.voted[_p][_from];
+        uint256 voted = round.voted[_p][_from] / 10;
         uint256 votingPoints = (_votes * (_votes + 1)) / 2;
         votingPoints += _votes * voted;
         cost = votingPoints * round.votePrice;
@@ -70,15 +75,14 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         }
     }
 
-    function batchVotingInfo(address _from, uint256[] memory _p)
-        public
-        view
-        returns (uint256[] memory voted)
-    {
+    function batchVotingInfo(
+        address _from,
+        uint256[] memory _p
+    ) public view returns (uint256[] memory voted) {
         Round storage round = _rounds[currentRound];
         voted = new uint256[](_p.length);
         for (uint256 i = 0; i < _p.length; i++) {
-            voted[i] = round.voted[_p[i]][_from];
+            voted[i] = round.voted[_p[i]][_from] / 10;
         }
     }
 
@@ -134,11 +138,10 @@ contract Grant is GrantStorage, GrantAdmin, GrantUser {
         return total;
     }
 
-    function donate(uint256 _amount, uint256 _category)
-        public
-        payable
-        nonReentrant
-    {
+    function donate(
+        uint256 _amount,
+        uint256 _category
+    ) public payable nonReentrant {
         require(_amount == msg.value);
 
         Round storage round = _rounds[currentRound];
